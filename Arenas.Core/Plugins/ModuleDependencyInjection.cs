@@ -1,9 +1,9 @@
 using Microsoft.Extensions.DependencyInjection;
 using Arenas.Api;
 using Arenas.Arena;
+using Arenas.Database;
 using Arenas.Loadout;
 using Arenas.Modules;
-using Arenas.Player;
 using Arenas.Queue;
 using Arenas.RoundFlow;
 
@@ -14,6 +14,13 @@ internal static class ModuleDependencyInjection
     /// <summary>Register all Core services and modules into the DI container.</summary>
     internal static IServiceCollection AddModules(this IServiceCollection services)
     {
+        // Phase C — persistence seam: CookiePrefStore is the default IArenasStore (IClientPreference
+        // cookies, no DB needed). An optional Arenas.Database project with SqlPrefStore can override
+        // IArenasStore by registering before the host is built.
+        services.AddSingleton<CookiePrefStore>();
+        services.AddSingleton<IArenasStore>(sp => sp.GetRequiredService<CookiePrefStore>());
+        services.AddSingleton<IModule>(sp => sp.GetRequiredService<CookiePrefStore>());
+
         // BootstrapModule kept as proof-of-life log.
         services.AddSingleton<BootstrapModule>();
         services.AddSingleton<IModule>(sp => sp.GetRequiredService<BootstrapModule>());
@@ -26,11 +33,11 @@ internal static class ModuleDependencyInjection
         AddModule<Config.ServerConfigModule>(services);
         AddModule<ArenaManagerModule>(services);
         AddModule<QueueModule>(services);
-        AddModule<PreferencesModule>(services);
         AddModule<LoadoutModule>(services);
         AddModule<ApiModule>(services);
         AddModule<RoundFlowModule>(services);
-        AddModule<PlayerLifecycleModule>(services);
+        AddModule<Player.PlayerLifecycleModule>(services);
+        AddModule<CrossArenaIsolationModule>(services);
 
         return services;
     }

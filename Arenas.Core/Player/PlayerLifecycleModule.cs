@@ -26,7 +26,6 @@ internal sealed class PlayerLifecycleModule : IModule, IClientListener, IEventLi
     private readonly InterfaceBridge                _bridge;
     private readonly QueueModule                    _queueModule;
     private readonly ArenaManagerModule             _arenaManager;
-    private readonly PreferencesModule              _preferences;
     private readonly RoundFlowModule                _roundFlow;
 
     private QueueManager QueueManager => _queueModule.QueueManager;
@@ -43,14 +42,12 @@ internal sealed class PlayerLifecycleModule : IModule, IClientListener, IEventLi
         InterfaceBridge                bridge,
         QueueModule                    queueModule,
         ArenaManagerModule             arenaManager,
-        PreferencesModule              preferences,
         RoundFlowModule                roundFlow)
     {
         _logger       = logger;
         _bridge       = bridge;
         _queueModule  = queueModule;
         _arenaManager = arenaManager;
-        _preferences  = preferences;
         _roundFlow    = roundFlow;
     }
 

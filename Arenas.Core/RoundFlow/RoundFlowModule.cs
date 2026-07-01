@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Arenas.Arena;
 using Arenas.Config;
+using Arenas.Database;
 using Arenas.Loadout;
 using Arenas.Plugins;
 using Arenas.Queue;
@@ -37,7 +38,7 @@ internal sealed class RoundFlowModule : IModule, IEventListener
     private readonly QueueModule              _queueModule;
     private readonly ArenaManagerModule       _arenaManager;
     private readonly LoadoutModule            _loadout;
-    private readonly Player.PreferencesModule _preferences;
+    private readonly IArenasStore             _store;
     private readonly Api.ApiModule            _api;
     private readonly ArenasApi                _arenasApi;
 
@@ -56,7 +57,7 @@ internal sealed class RoundFlowModule : IModule, IEventListener
         QueueModule              queueModule,
         ArenaManagerModule       arenaManager,
         LoadoutModule            loadout,
-        Player.PreferencesModule preferences,
+        IArenasStore             store,
         Api.ApiModule            api,
         ArenasApi                arenasApi)
     {
@@ -66,7 +67,7 @@ internal sealed class RoundFlowModule : IModule, IEventListener
         _queueModule  = queueModule;
         _arenaManager = arenaManager;
         _loadout      = loadout;
-        _preferences  = preferences;
+        _store        = store;
         _api          = api;
         _arenasApi    = arenasApi;
     }
@@ -266,6 +267,11 @@ internal sealed class RoundFlowModule : IModule, IEventListener
             var state = QueueManager.GetOrCreateState(slot);
             state.ArenaTag = Loc.Format(_bridge.LocalizerManager, "Arenas_Tag_Arena", arena.ArenaId);
 
+            // Slay the LIVE pawn before re-seating, else SwitchTeam/ChangeTeam leaves a ghost body
+            // at the old arena position (they never slay). [[feedback_slay_before_team_transfer]]
+            if (controller.GetPlayerPawn() is { IsValidEntity: true, IsAlive: true } livePawn)
+                livePawn.Slay();
+
             if (controller.Team > CStrikeTeam.Spectator)
                 controller.SwitchTeam(switchTo);
             else
@@ -304,7 +310,7 @@ internal sealed class RoundFlowModule : IModule, IEventListener
     {
         var client = _bridge.ClientManager.GetGameClient(slot);
         if (client is null) return [.. _roundTypes.Where(r => r.EnabledByDefault).Select(r => r.Id)];
-        return _preferences.GetEnabledRoundTypeIds(client.SteamId, _roundTypes);
+        return _store.GetEnabledRoundTypeIds(client.SteamId, _roundTypes);
     }
 
     /// <summary>K4's GetCommonRoundType: intersection of both players' enabled 1v1 round types,
@@ -380,9 +386,9 @@ internal sealed class RoundFlowModule : IModule, IEventListener
 
     private bool IsSlotAlive(PlayerSlot slot)
     {
-        var client = _bridge.ClientManager.GetGameClient(slot);
-        var pawn   = client?.GetPlayerController()?.GetPlayerPawn();
-        return pawn is { IsAlive: true };
+        if (_bridge.ClientManager.GetGameClient(slot) is not { IsInGame: true } client) return false;
+        if (client.GetPlayerController() is not { } controller) return false;
+        return controller.GetPlayerPawn() is { IsAlive: true };
     }
 
     // ── PlayerSpawnPost: teleport + loadout ──────────────────────────────────
@@ -390,7 +396,7 @@ internal sealed class RoundFlowModule : IModule, IEventListener
     private void OnPlayerSpawnPost(IPlayerSpawnForwardParams @params)
     {
         var client = @params.Client;
-        if (client.IsFakeClient && !client.IsInGame) return;
+        if (client is not { IsInGame: true }) return; // both humans + bots must be in-game before touching the pawn
 
         var slot  = client.Slot;
         var arena = _arenaManager.FindArenaForSlot(slot);
@@ -431,6 +437,8 @@ internal sealed class RoundFlowModule : IModule, IEventListener
 
     private void OnPlayerKilledPost(IPlayerKilledForwardParams @params)
     {
+        // Skip scheduling during warmup — TerminateRoundIfPossible no-ops there anyway; avoids per-kill GC churn.
+        if (_bridge.ModSharp.GetGameRules() is not { IsWarmupPeriod: false }) return;
         _bridge.ModSharp.PushTimer(TerminateRoundIfPossible, 1.0, GameTimerFlags.StopOnMapEnd | GameTimerFlags.StopOnRoundEnd);
     }
 

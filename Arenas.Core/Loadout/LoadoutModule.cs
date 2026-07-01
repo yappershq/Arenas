@@ -1,5 +1,6 @@
 using Arenas.Arena;
 using Arenas.Config;
+using Arenas.Database;
 using Arenas.Plugins;
 using Microsoft.Extensions.Logging;
 using Sharp.Shared.GameEntities;
@@ -16,14 +17,14 @@ internal sealed class LoadoutModule : IModule
     private readonly InterfaceBridge          _bridge;
     private readonly ILogger<LoadoutModule>   _logger;
     private readonly Config.ConfigModule      _config;
-    private readonly Player.PreferencesModule _preferences;
+    private readonly IArenasStore             _store;
 
-    public LoadoutModule(InterfaceBridge bridge, ILogger<LoadoutModule> logger, Config.ConfigModule config, Player.PreferencesModule preferences)
+    public LoadoutModule(InterfaceBridge bridge, ILogger<LoadoutModule> logger, Config.ConfigModule config, IArenasStore store)
     {
-        _bridge      = bridge;
-        _logger      = logger;
-        _config      = config;
-        _preferences = preferences;
+        _bridge = bridge;
+        _logger = logger;
+        _config = config;
+        _store  = store;
     }
 
     public bool Init() => true;
@@ -55,7 +56,7 @@ internal sealed class LoadoutModule : IModule
             }
             else if (roundType.UsePreferredPrimary && roundType.PrimaryPreference is { } primaryType)
             {
-                var pref = _preferences.GetWeaponPreference(client.SteamId, primaryType)
+                var pref = _store.GetWeaponPreference(client.SteamId, primaryType)
                            ?? WeaponCatalog.GetRandomWeapon(primaryType);
                 pawn.GiveNamedItem(pref);
             }
@@ -66,7 +67,7 @@ internal sealed class LoadoutModule : IModule
             }
             else if (roundType.UsePreferredSecondary)
             {
-                var pref = _preferences.GetWeaponPreference(client.SteamId, Shared.WeaponType.Pistol)
+                var pref = _store.GetWeaponPreference(client.SteamId, Shared.WeaponType.Pistol)
                            ?? WeaponCatalog.GetRandomWeapon(Shared.WeaponType.Pistol);
                 pawn.GiveNamedItem(pref);
             }
