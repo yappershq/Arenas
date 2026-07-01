@@ -1,5 +1,182 @@
 {
   "Arenas_Prefix": {
-    "en-US": "{green}[Arenas]{default} "
+    "en-US": "{{green}}[Arenas]{{default}} "
+  },
+
+  "Arenas_Tag_Arena": {
+    "en-US": "ARENA {0} |"
+  },
+  "Arenas_Tag_Afk": {
+    "en-US": "AFK |"
+  },
+  "Arenas_Tag_Waiting": {
+    "en-US": "WAITING |"
+  },
+  "Arenas_Tag_Warmup": {
+    "en-US": "WARMUP |"
+  },
+  "Arenas_Tag_Challenge": {
+    "en-US": "CHALLENGE |"
+  },
+  "Arenas_General_NoOpponent": {
+    "en-US": "No opponent"
+  },
+  "Arenas_General_Random": {
+    "en-US": "Random"
+  },
+  "Arenas_General_Bot": {
+    "en-US": "BOT"
+  },
+
+  "Arenas_Challenge_Tie": {
+    "en-US": "{{silver}}The challenge between {{lime}}{0}{{silver}} and {{lime}}{1}{{silver}} ended in a tie."
+  },
+  "Arenas_Challenge_Winner": {
+    "en-US": "{{lime}}{0}{{silver}} won the challenge against {{lime}}{1}{{silver}}."
+  },
+  "Arenas_Challenge_Waiting": {
+    "en-US": "{{silver}}Waiting for {{lime}}{0}{{silver}} to respond to the challenge."
+  },
+  "Arenas_Challenge_Request": {
+    "en-US": "{{silver}}You have been challenged by {{lime}}{0}{{silver}}. Use {{lime}}!{1} {{silver}}to accept or {{lime}}!{2} {{silver}}to decline."
+  },
+  "Arenas_Challenge_Accepted": {
+    "en-US": "{{silver}}You have accepted the challenge from {{lime}}{0}{{silver}}."
+  },
+  "Arenas_Challenge_AcceptedBy": {
+    "en-US": "{{lime}}{0} {{silver}}has accepted your challenge."
+  },
+  "Arenas_Challenge_Declined": {
+    "en-US": "{{silver}}You have declined the challenge from {{lime}}{0}{{silver}}."
+  },
+  "Arenas_Challenge_DeclinedBy": {
+    "en-US": "{{lime}}{0} {{silver}}has declined your challenge."
+  },
+  "Arenas_Challenge_InvalidTarget": {
+    "en-US": "{{lightred}}Invalid target. You can only challenge players by their name."
+  },
+  "Arenas_Challenge_NotAvailable": {
+    "en-US": "{{lightred}}The player is not available anymore."
+  },
+  "Arenas_Challenge_InChallenge": {
+    "en-US": "{{lightred}}Challenge can only be requested if both players are not already in a challenge."
+  },
+  "Arenas_Challenge_NotInArena": {
+    "en-US": "{{lightred}}Challenge can only be requested if both players are in the arena."
+  },
+  "Arenas_Challenge_NotChallenged": {
+    "en-US": "{{lightred}}You have no challenge requests or they have expired."
+  },
+
+  "Arenas_Command_ClientOnly": {
+    "en-US": "{{lightred}}This command can only be used by clients."
+  },
+  "Arenas_Command_Help": {
+    "en-US": "{{silver}}Expected usage: {{lime}}!{0} {1}"
+  },
+  "Arenas_Command_NoPerm": {
+    "en-US": "{{lightred}}You do not have permission to use this command."
+  },
+  "Arenas_Command_ServerOnly": {
+    "en-US": "{{lightred}}This command can only be used by the server."
+  },
+
+  "Arenas_Chat_QueueAdded": {
+    "en-US": "{{silver}}You have been added to the queue. Your position is {{lime}}{0}{{silver}}."
+  },
+  "Arenas_Chat_QueueNotInQueue": {
+    "en-US": "{{silver}}You are not in the queue."
+  },
+  "Arenas_Chat_QueuePosition": {
+    "en-US": "{{silver}}You are in position {{lime}}{0}{{silver}} in the waiting queue."
+  },
+
+  "Arenas_Chat_RoundPreferencesAdded": {
+    "en-US": "{{silver}}You have added {{lime}}{0}{{silver}} to your round preferences."
+  },
+  "Arenas_Chat_RoundPreferencesRemoved": {
+    "en-US": "{{silver}}You have removed {{lime}}{0}{{silver}} from your round preferences."
+  },
+  "Arenas_Chat_RoundPreferencesAtLeastOne": {
+    "en-US": "{{lightred}}You cannot disable all rounds. At least one round must be enabled."
+  },
+  "Arenas_Chat_ArenaRoundStart": {
+    "en-US": "{{silver}}You are in arena {{lime}}{0}{{silver}} playing {{lime}}{1}{{silver}} against {{lime}}{2}{{silver}} opponent(s)."
+  },
+  "Arenas_Chat_ArenaCommands": {
+    "en-US": "{{silver}}You can change your preferences with {{lime}}!{0}{{silver}} and {{lime}}!{1}{{silver}}."
+  },
+  "Arenas_Chat_ArenaAfkHint": {
+    "en-US": "{{silver}}You can go to AFK mode with {{lime}}!afk{{silver}}."
+  },
+
+  "Arenas_Chat_AfkReminder": {
+    "en-US": "{{lightred}}You are still AFK. Use {{gold}}!afk {{lightred}}again to disable it."
+  },
+  "Arenas_Chat_AfkEnabled": {
+    "en-US": "{{silver}}You are now AFK. Use {{gold}}!afk {{silver}}to disable it."
+  },
+  "Arenas_Chat_AfkDisabled": {
+    "en-US": "{{silver}}You are no longer AFK."
+  },
+
+  "Arenas_Menu_RoundPref_Title": {
+    "en-US": "{{lightred}}Arena Round Preferences"
+  },
+  "Arenas_Menu_RoundPref_ItemEnabled": {
+    "en-US": "{0} {{lime}}Enabled"
+  },
+  "Arenas_Menu_RoundPref_ItemDisabled": {
+    "en-US": "{0} {{red}}Disabled"
+  },
+
+  "Arenas_Menu_WeaponPref_Title": {
+    "en-US": "{{lightred}}Arena Weapon Preferences"
+  },
+  "Arenas_Menu_WeaponPref_ItemEnabled": {
+    "en-US": "{{gold}}{0} {{lime}}(Selected)"
+  },
+  "Arenas_Menu_WeaponPref_ItemDisabled": {
+    "en-US": "{{gold}}{0}"
+  },
+  "Arenas_Chat_WeaponPreferencesAdded": {
+    "en-US": "{{silver}}You have added {{lime}}{0}{{silver}} to your weapon preferences."
+  },
+
+  "Arenas_Round_Rifle": {
+    "en-US": "Rifle"
+  },
+  "Arenas_Round_Pistol": {
+    "en-US": "Pistol"
+  },
+  "Arenas_Round_Scout": {
+    "en-US": "Scout"
+  },
+  "Arenas_Round_Sniper": {
+    "en-US": "Sniper"
+  },
+  "Arenas_Round_Shotgun": {
+    "en-US": "Shotgun"
+  },
+  "Arenas_Round_Smg": {
+    "en-US": "SMG"
+  },
+  "Arenas_Round_Lmg": {
+    "en-US": "LMG"
+  },
+  "Arenas_Round_Awp": {
+    "en-US": "AWP"
+  },
+  "Arenas_Round_Deagle": {
+    "en-US": "Deagle"
+  },
+  "Arenas_Round_Knife": {
+    "en-US": "Knife"
+  },
+  "Arenas_Round_2v2": {
+    "en-US": "2vs2"
+  },
+  "Arenas_Round_3v3": {
+    "en-US": "3vs3"
   }
 }
