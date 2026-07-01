@@ -85,6 +85,7 @@ internal sealed class PlayerLifecycleModule : IModule, IClientListener, IEventLi
     void IClientListener.OnClientDisconnected(IGameClient client, NetworkDisconnectionReason reason)
     {
         QueueManager.ClearSlot(client.Slot);
+        _queueModule.ChallengeService.RemoveForSlot(client.Slot);
         _arenaManager.RemoveSlotFromAllArenas(client.Slot);
         _roundFlow.TerminateRoundIfPossible();
     }

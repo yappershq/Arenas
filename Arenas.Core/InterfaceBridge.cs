@@ -1,6 +1,9 @@
 using System.IO;
 using Microsoft.Extensions.Logging;
+using Sharp.Modules.CommandCenter.Shared;
 using Sharp.Modules.LocalizerManager.Shared;
+using Sharp.Modules.MenuManager.Shared;
+using Sharp.Modules.TargetingManager.Shared;
 using Sharp.Shared;
 using Sharp.Shared.Managers;
 
@@ -37,6 +40,15 @@ internal sealed class InterfaceBridge
     /// the publishing plugin may not have registered it yet); null when the module isn't installed.
     /// </summary>
     internal ILocalizerManager?  LocalizerManager   { get; set; }
+
+    /// <summary>Optional command registry (CommandCenter). Resolved in OnAllModulesLoaded; null when absent.</summary>
+    internal ICommandCenter?     CommandCenter      { get; set; }
+
+    /// <summary>Optional menu manager. Resolved in OnAllModulesLoaded; null when absent (menus silently unavailable).</summary>
+    internal IMenuManager?       MenuManager        { get; set; }
+
+    /// <summary>Optional targeting manager (target-by-name for the challenge command). Resolved in OnAllModulesLoaded.</summary>
+    internal ITargetingManager?  TargetingManager   { get; set; }
 
     public InterfaceBridge(IModSharpModule module, ISharedSystem sharedSystem, string sharpPath, ILoggerFactory loggerFactory)
     {

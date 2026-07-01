@@ -5,7 +5,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Arenas.Plugins;
 using Arenas.Shared;
+using Sharp.Modules.CommandCenter.Shared;
 using Sharp.Modules.LocalizerManager.Shared;
+using Sharp.Modules.MenuManager.Shared;
+using Sharp.Modules.TargetingManager.Shared;
 using Sharp.Shared;
 
 namespace Arenas;
@@ -75,8 +78,11 @@ public sealed class ArenasPlugin : IModSharpModule
 
     public void OnAllModulesLoaded()
     {
-        _bridge.LocalizerManager = _bridge.SharpModuleManager
-            .GetOptionalSharpModuleInterface<ILocalizerManager>(ILocalizerManager.Identity)?.Instance;
+        var smm = _bridge.SharpModuleManager;
+        _bridge.LocalizerManager = smm.GetOptionalSharpModuleInterface<ILocalizerManager>(ILocalizerManager.Identity)?.Instance;
+        _bridge.CommandCenter    = smm.GetOptionalSharpModuleInterface<ICommandCenter>(ICommandCenter.Identity)?.Instance;
+        _bridge.MenuManager      = smm.GetOptionalSharpModuleInterface<IMenuManager>(IMenuManager.Identity)?.Instance;
+        _bridge.TargetingManager = smm.GetOptionalSharpModuleInterface<ITargetingManager>(ITargetingManager.Identity)?.Instance;
         LoadLocaleFiles();
 
         foreach (var module in _provider.GetServices<IModule>())

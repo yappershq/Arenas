@@ -120,6 +120,16 @@
     "en-US": "{{silver}}You are no longer AFK."
   },
 
+  "Arenas_Menu_Back": {
+    "en-US": "Back"
+  },
+  "Arenas_Menu_Exit": {
+    "en-US": "Exit"
+  },
+  "Arenas_Chat_MenusUnavailable": {
+    "en-US": "{{lightred}}The preference menu is unavailable (MenuManager not installed)."
+  },
+
   "Arenas_Menu_RoundPref_Title": {
     "en-US": "{{lightred}}Arena Round Preferences"
   },

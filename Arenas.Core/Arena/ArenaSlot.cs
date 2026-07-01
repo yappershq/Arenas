@@ -20,6 +20,7 @@ internal sealed class ArenaSlot
     public required List<Vector> TSpawns  { get; init; }
 
     public int ArenaId = -1;
+    public bool IsChallenge;
     public RoundType? CurrentRoundType;
     public ArenaResult Result = new(ArenaResultType.Empty, null, null);
 
@@ -32,6 +33,7 @@ internal sealed class ArenaSlot
     public void Reset()
     {
         ArenaId          = -1;
+        IsChallenge      = false;
         CurrentRoundType = null;
         Result           = new ArenaResult(ArenaResultType.Empty, null, null);
         Team1             = null;

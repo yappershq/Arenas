@@ -42,7 +42,8 @@ internal sealed class RoundFlowModule : IModule, IEventListener
     private readonly Api.ApiModule            _api;
     private readonly ArenasApi                _arenasApi;
 
-    private QueueManager QueueManager => _queueModule.QueueManager;
+    private QueueManager     QueueManager     => _queueModule.QueueManager;
+    private ChallengeService ChallengeService => _queueModule.ChallengeService;
 
     private bool _isBetweenRounds;
     private List<RoundType> _roundTypes = [];
@@ -195,12 +196,35 @@ internal sealed class RoundFlowModule : IModule, IEventListener
         // Prioritize real players over bots for arena seating (K4: OrderBy(IsBot)).
         notAfk = new Queue<PlayerSlot>(notAfk.OrderBy(IsBotSlot));
 
+        // Drain accepted duel challenges — they get seated FIRST (one arena each), removed from the
+        // ladder queue, before normal ladder pairing (K4 PluginEvents: challenges handled per arena
+        // index ahead of AddTeamsToArena/AddPlayers). Drop stale challenges (a party disconnected).
+        var challenges = ChallengeService.DrainAccepted()
+            .Where(c => IsSlotConnected(c.Challenger) && IsSlotConnected(c.Target))
+            .ToList();
+        if (challenges.Count > 0)
+        {
+            var challengeSlots = challenges
+                .SelectMany(c => new[] { c.Challenger, c.Target })
+                .ToHashSet();
+            notAfk = new Queue<PlayerSlot>(notAfk.Where(s => !challengeSlots.Contains(s)));
+        }
+
         var displayIndex = 1;
+        var challengeIndex = 0;
         foreach (var arena in _arenaManager.Arenas)
         {
             arena.Reset();
 
-            if (notAfk.Count >= 1)
+            if (challengeIndex < challenges.Count)
+            {
+                var c = challenges[challengeIndex++];
+                var roundType = GetCommonRoundType(
+                    GetEnabledTypes(c.Challenger), GetEnabledTypes(c.Target));
+                AssignArena(arena, [c.Challenger], [c.Target], roundType, displayIndex, isChallenge: true);
+                displayIndex++;
+            }
+            else if (notAfk.Count >= 1)
             {
                 var p1 = notAfk.Dequeue();
                 PlayerSlot? p2 = notAfk.TryDequeue(out var p2Slot) ? p2Slot : null;
@@ -230,13 +254,15 @@ internal sealed class RoundFlowModule : IModule, IEventListener
     }
 
     private void AssignArena(
-        ArenaSlot arena, List<PlayerSlot>? team1, List<PlayerSlot>? team2, RoundType? roundType, int displayId)
+        ArenaSlot arena, List<PlayerSlot>? team1, List<PlayerSlot>? team2, RoundType? roundType, int displayId,
+        bool isChallenge = false)
     {
         arena.ArenaId          = displayId;
         arena.Team1             = team1;
         arena.Team2             = team2;
         arena.CurrentRoundType = roundType ?? (_roundTypes.Count > 0 ? _roundTypes[0] : null);
         arena.Result           = new ArenaResult(ArenaResultType.Empty, null, null);
+        arena.IsChallenge      = isChallenge;
 
         if (team1 is null && team2 is null) return;
 
@@ -244,11 +270,11 @@ internal sealed class RoundFlowModule : IModule, IEventListener
         var t1Spawns  = swapSides ? arena.CtSpawns : arena.TSpawns;
         var t2Spawns  = swapSides ? arena.TSpawns  : arena.CtSpawns;
 
-        SeatTeam(arena, team1, t1Spawns, CStrikeTeam.TE);
-        SeatTeam(arena, team2, t2Spawns, CStrikeTeam.CT);
+        SeatTeam(arena, team1, t1Spawns, CStrikeTeam.TE, isChallenge);
+        SeatTeam(arena, team2, t2Spawns, CStrikeTeam.CT, isChallenge);
     }
 
-    private void SeatTeam(ArenaSlot arena, List<PlayerSlot>? team, List<Vector> spawns, CStrikeTeam switchTo)
+    private void SeatTeam(ArenaSlot arena, List<PlayerSlot>? team, List<Vector> spawns, CStrikeTeam switchTo, bool isChallenge = false)
     {
         if (team is null || spawns.Count == 0) return;
 
@@ -265,7 +291,9 @@ internal sealed class RoundFlowModule : IModule, IEventListener
             spawnPool.RemoveAt(idx);
 
             var state = QueueManager.GetOrCreateState(slot);
-            state.ArenaTag = Loc.Format(_bridge.LocalizerManager, "Arenas_Tag_Arena", arena.ArenaId);
+            state.ArenaTag = isChallenge
+                ? Loc.Format(_bridge.LocalizerManager, "Arenas_Tag_Challenge")
+                : Loc.Format(_bridge.LocalizerManager, "Arenas_Tag_Arena", arena.ArenaId);
 
             // Slay the LIVE pawn before re-seating, else SwitchTeam/ChangeTeam leaves a ghost body
             // at the old arena position (they never slay). [[feedback_slay_before_team_transfer]]

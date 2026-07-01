@@ -39,6 +39,11 @@ internal static class ModuleDependencyInjection
         AddModule<Player.PlayerLifecycleModule>(services);
         AddModule<CrossArenaIsolationModule>(services);
 
+        // Phase C — commands, menus, challenge duels, force-clantags.
+        AddModule<Menus.MenusModule>(services);
+        AddModule<Commands.CommandsModule>(services);
+        AddModule<Player.ClanTagModule>(services);
+
         return services;
     }
 

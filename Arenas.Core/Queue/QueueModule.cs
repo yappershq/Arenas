@@ -5,7 +5,8 @@ namespace Arenas.Queue;
 
 internal sealed class QueueModule : IModule
 {
-    public QueueManager QueueManager { get; }
+    public QueueManager     QueueManager     { get; }
+    public ChallengeService ChallengeService { get; } = new();
 
     public QueueModule(InterfaceBridge bridge)
         => QueueManager = new QueueManager(bridge.LoggerFactory.CreateLogger<QueueManager>());
