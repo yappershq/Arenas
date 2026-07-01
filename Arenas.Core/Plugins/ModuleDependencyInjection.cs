@@ -6,6 +6,8 @@ using Arenas.Loadout;
 using Arenas.Modules;
 using Arenas.Queue;
 using Arenas.RoundFlow;
+using Arenas.Shared;
+using Arenas.Vip;
 
 namespace Arenas.Plugins;
 
@@ -17,6 +19,12 @@ internal static class ModuleDependencyInjection
         // Shared round-type registry (built-ins + config + addon-registered specials). Owned by
         // RoundFlowModule, read by MenusModule — a plain singleton (not an IModule).
         services.AddSingleton<Rounds.RoundTypeRegistry>();
+
+        // DefaultVipProvider — nobody is VIP; an external Arenas.Vip plugin can replace IArenasVipProvider
+        // by re-registering the interface before the host is built.
+        services.AddSingleton<DefaultVipProvider>();
+        services.AddSingleton<IArenasVipProvider>(sp => sp.GetRequiredService<DefaultVipProvider>());
+        services.AddSingleton<IModule>(sp => sp.GetRequiredService<DefaultVipProvider>());
 
         // Phase C — persistence seam: CookiePrefStore is the default IArenasStore (IClientPreference
         // cookies, no DB needed). An optional Arenas.Database project with SqlPrefStore can override

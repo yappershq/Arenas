@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using Arenas.Arena;
 using Arenas.Config;
 using Arenas.Menus;
@@ -7,6 +8,7 @@ using Arenas.Plugins;
 using Arenas.Queue;
 using Arenas.Utils;
 using Microsoft.Extensions.Logging;
+using Sharp.Modules.AdminManager.Shared;
 using Sharp.Modules.CommandCenter.Shared;
 using Sharp.Modules.MenuManager.Shared;
 using Sharp.Shared.Enums;
@@ -34,6 +36,10 @@ internal sealed class CommandsModule : IModule
     private readonly MenusModule            _menus;
     private readonly RoundFlow.RoundFlowModule _roundFlow;
     private readonly ArenasApi              _arenasApi;
+
+    private IAdminManager? _adminManager;
+
+    private const string ModuleIdentity = "Arenas.Core.Commands";
 
     private QueueManager     QueueManager     => _queueModule.QueueManager;
     private ChallengeService ChallengeService => _queueModule.ChallengeService;
@@ -63,6 +69,23 @@ internal sealed class CommandsModule : IModule
 
     public void OnAllSharpModulesLoaded()
     {
+        // Resolve admin manager and mount permission manifest so wildcard admins can use admin cmds.
+        _adminManager = _bridge.SharpModuleManager
+            .GetOptionalSharpModuleInterface<IAdminManager>(IAdminManager.Identity)?.Instance;
+
+        if (_adminManager is not null)
+        {
+            var perm = _config.Config.CommandSettings.AdminPermission;
+            _adminManager.MountAdminManifest(ModuleIdentity, () => new AdminTableManifest(
+                PermissionCollection: new System.Collections.Generic.Dictionary<string, System.Collections.Generic.HashSet<string>>
+                {
+                    [perm] = []
+                },
+                Roles:  [],
+                Admins: []
+            ));
+        }
+
         if (_bridge.CommandCenter is not { } cc)
         {
             _logger.LogWarning("[Arenas] ICommandCenter not available — chat commands will not be registered.");
@@ -79,6 +102,7 @@ internal sealed class CommandsModule : IModule
         Register(reg, cmds.ChallengeCommands,        OnChallenge);
         Register(reg, cmds.ChallengeAcceptCommands,  OnChallengeAccept);
         Register(reg, cmds.ChallengeDeclineCommands, OnChallengeDecline);
+        Register(reg, cmds.AdminCommands,            OnAdmin);
 
         // Route IArenasShared.SetAfk through the full AFK action (spectate + retag + terminate),
         // overriding ApiModule's flag-only default (registered earlier → this wins in OAM order).
@@ -281,6 +305,52 @@ internal sealed class CommandsModule : IModule
         Loc.Chat(_bridge.LocalizerManager, client, "Arenas_Challenge_Declined", challengerName);
         if (challenger is { IsInGame: true })
             Loc.Chat(_bridge.LocalizerManager, challenger, "Arenas_Challenge_DeclinedBy", client.Name);
+    }
+
+    // ── admin: arena status dump ──────────────────────────────────────────────
+
+    /// <summary>
+    /// !arenas — shows current arena ladder assignments in chat (admin-gated).
+    /// Mirrors K4's css_k4arenas command. No paging — prints each arena on its own line.
+    /// </summary>
+    private void OnAdmin(IGameClient client, StringCommand _)
+    {
+        var perm = _config.Config.CommandSettings.AdminPermission;
+        if (_adminManager?.GetAdmin((SteamID)client.SteamId)?.HasPermission(perm) != true)
+        {
+            Loc.Chat(_bridge.LocalizerManager, client, "Arenas_Command_NoPerm");
+            return;
+        }
+
+        var arenas = _arenaManager.Arenas;
+        if (arenas.Count == 0)
+        {
+            Loc.Chat(_bridge.LocalizerManager, client, "Arenas_Admin_NoArenas");
+            return;
+        }
+
+        Loc.Chat(_bridge.LocalizerManager, client, "Arenas_Admin_Header", arenas.Count);
+        for (var i = 0; i < arenas.Count; i++)
+        {
+            var arena   = arenas[i];
+            var t1Names = FormatSlotList(arena.Team1);
+            var t2Names = FormatSlotList(arena.Team2);
+            var rtName  = arena.CurrentRoundType?.Name ?? "—";
+            Loc.Chat(_bridge.LocalizerManager, client, "Arenas_Admin_ArenaLine", i + 1, rtName, t1Names, t2Names);
+        }
+    }
+
+    private string FormatSlotList(IReadOnlyList<PlayerSlot>? slots)
+    {
+        if (slots is null || slots.Count == 0) return "—";
+        var sb = new StringBuilder();
+        foreach (var slot in slots)
+        {
+            if (sb.Length > 0) sb.Append(", ");
+            var name = _bridge.ClientManager.GetGameClient(slot)?.Name ?? $"#{slot.AsPrimitive()}";
+            sb.Append(name);
+        }
+        return sb.ToString();
     }
 
     // (target resolution below)
