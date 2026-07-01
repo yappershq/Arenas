@@ -51,15 +51,16 @@ External plugins:
 
 All commands are open (no permission). Chat triggers: `!`, `/`, or `.`; console prefix `ms_`. Aliases are configurable in `arenas.json`.
 
-| Command | Aliases | Description |
-|---------|---------|-------------|
-| `!queue` | — | Show your position in the waiting queue. |
-| `!guns` | `!gunpref`, `!weaponpref` | Open the weapon-preference menu (per category). |
-| `!rounds` | `!roundpref` | Open the round-type-preference toggle menu. |
-| `!afk` | — | Toggle AFK (move to spectator, re-queue at the tail). |
-| `!challenge <name>` | `!duel <name>` | Challenge another player in an arena to a 1v1 duel. |
-| `!caccept` | `!capprove` | Accept a pending challenge. |
-| `!cdecline` | `!cdeny` | Decline a pending challenge. |
+| Command | Aliases | Description | Permission |
+|---------|---------|-------------|------------|
+| `!queue` | — | Show your position in the waiting queue. | — |
+| `!guns` | `!gunpref`, `!weaponpref` | Open the weapon-preference menu (per category). | — |
+| `!rounds` | `!roundpref` | Open the round-type-preference toggle menu. | — |
+| `!afk` | — | Toggle AFK (move to spectator, re-queue at the tail). | — |
+| `!challenge <name>` | `!duel <name>` | Challenge another player in an arena to a 1v1 duel. | — |
+| `!caccept` | `!capprove` | Accept a pending challenge. | — |
+| `!cdecline` | `!cdeny` | Decline a pending challenge. | — |
+| `!arenas` | — | Print current arena ladder assignments in chat (admin debug). | `admin-permission` |
 
 ## ⚙️ Configuration
 
@@ -69,6 +70,9 @@ All commands are open (no permission). Chat triggers: `!`, `/`, or `.`; console 
 |---------|---------|---------|
 | `command-settings.*-commands` | see above | Command name/alias lists. |
 | `command-settings.center-menu-mode` | `true` | Prefer center-HUD menus over chat menus. |
+| `command-settings.center-announce-mode` | `true` | Show round/arena announcements as center-HUD text (falls back to chat). |
+| `command-settings.freeze-in-center-menu` | `true` | Freeze players while a center-HUD preference menu is open. |
+| `command-settings.admin-permission` | `"@css/generic"` | AdminManager permission flag required for the `!arenas` admin command. |
 | `compatibility-settings.force-arena-clantags` | `false` | Reflect the arena tag (ARENA n / WAITING / AFK / CHALLENGE) into the scoreboard clan tag. |
 | `compatibility-settings.disable-clantags` | `false` | Never touch clan tags. |
 | `compatibility-settings.block-damage-of-not-opponent` | `false` | Block damage between players in different arenas. |
@@ -107,7 +111,11 @@ api.UnregisterRoundType(id); // in Shutdown
 dotnet build -c Release
 ```
 
-Outputs `.build/modules/Arenas.Core/Arenas.dll`, `.build/shared/Arenas.Shared/Arenas.Shared.dll`, and `.build/modules/Arenas.SpecialRounds/Arenas.SpecialRounds.dll`.
+Outputs:
+- `.build/modules/Arenas.Core/Arenas.dll`
+- `.build/shared/Arenas.Shared/Arenas.Shared.dll`
+- `.build/modules/Arenas.SpecialRounds/Arenas.SpecialRounds.dll`
+- `.build/modules/Arenas.Vip/Arenas.Vip.dll`
 
 ## 🔗 Integrations
 
