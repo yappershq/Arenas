@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Arenas.Shared/Arenas.Shared.csproj" />
+  <Project Path="Arenas.Core/Arenas.Core.csproj" />
+</Solution>
