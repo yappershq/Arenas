@@ -59,6 +59,7 @@ internal sealed class LoadoutModule : IModule
             else if (roundType.UsePreferredPrimary && roundType.PrimaryPreference is { } primaryType)
             {
                 var pref = _store.GetWeaponPreference(client.SteamId, primaryType)
+                           ?? GetDefaultForType(primaryType)
                            ?? WeaponCatalog.GetRandomWeapon(primaryType);
                 pawn.GiveNamedItem(pref);
             }
@@ -70,6 +71,7 @@ internal sealed class LoadoutModule : IModule
             else if (roundType.UsePreferredSecondary)
             {
                 var pref = _store.GetWeaponPreference(client.SteamId, Shared.WeaponType.Pistol)
+                           ?? GetDefaultForType(Shared.WeaponType.Pistol)
                            ?? WeaponCatalog.GetRandomWeapon(Shared.WeaponType.Pistol);
                 pawn.GiveNamedItem(pref);
             }
@@ -106,4 +108,16 @@ internal sealed class LoadoutModule : IModule
             }
         });
     }
+
+    /// <summary>Server-configured default weapon per category — falls between player pref and random.</summary>
+    private string? GetDefaultForType(Shared.WeaponType type) => type switch
+    {
+        Shared.WeaponType.Rifle   => _config.Config.DefaultWeaponSettings.DefaultRifle,
+        Shared.WeaponType.Sniper  => _config.Config.DefaultWeaponSettings.DefaultSniper,
+        Shared.WeaponType.Smg    => _config.Config.DefaultWeaponSettings.DefaultSmg,
+        Shared.WeaponType.Lmg    => _config.Config.DefaultWeaponSettings.DefaultLmg,
+        Shared.WeaponType.Shotgun => _config.Config.DefaultWeaponSettings.DefaultShotgun,
+        Shared.WeaponType.Pistol  => _config.Config.DefaultWeaponSettings.DefaultPistol,
+        _                         => null
+    };
 }

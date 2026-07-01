@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Arenas.Plugins;
 using Microsoft.Extensions.Logging;
 
@@ -21,7 +22,11 @@ internal sealed class ConfigModule : IModule
     public bool Init()
     {
         var path = Path.Combine(_bridge.ConfigPath, "arenas.json");
-        var opts = new JsonSerializerOptions { WriteIndented = true };
+        var opts = new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            Converters    = { new JsonStringEnumConverter() },
+        };
 
         if (!File.Exists(path))
         {

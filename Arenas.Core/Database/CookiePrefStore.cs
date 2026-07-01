@@ -66,7 +66,10 @@ internal sealed class CookiePrefStore : IModule, IArenasStore
     }
 
     public void SetWeaponPreference(SteamID steamId, WeaponType type, string? classname)
-        => _prefs?.SetCookie(steamId, WeaponKey(type), classname ?? string.Empty);
+    {
+        if (_prefs is null || !_prefs.IsLoaded(steamId)) return;
+        _prefs.SetCookie(steamId, WeaponKey(type), classname ?? string.Empty);
+    }
 
     public HashSet<int> GetEnabledRoundTypeIds(SteamID steamId, IReadOnlyList<RoundType> allRoundTypes)
     {
@@ -86,7 +89,10 @@ internal sealed class CookiePrefStore : IModule, IArenasStore
     }
 
     public void SetRoundTypeEnabled(SteamID steamId, string roundTypeName, bool enabled)
-        => _prefs?.SetCookie(steamId, RoundKey(roundTypeName), enabled ? 1L : 0L);
+    {
+        if (_prefs is null || !_prefs.IsLoaded(steamId)) return;
+        _prefs.SetCookie(steamId, RoundKey(roundTypeName), enabled ? 1L : 0L);
+    }
 
     // ── key helpers ───────────────────────────────────────────────────────────
 

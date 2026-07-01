@@ -128,15 +128,20 @@ internal sealed class PlayerLifecycleModule : IModule, IClientListener, IEventLi
         var currentTeam = client.GetPlayerController()?.Team ?? CStrikeTeam.Spectator;
         var state       = QueueManager.GetOrCreateState(slot);
 
-        // active/live -> spectator: mark AFK, requeue at tail.
+        // active/live -> spectator: mark AFK, evict from any arena/challenge, requeue at tail.
         if (currentTeam is not CStrikeTeam.Spectator and not CStrikeTeam.UnAssigned
             && requestedTeam == CStrikeTeam.Spectator && !state.Afk)
         {
-            state.Afk       = true;
-            state.ArenaTag  = Loc.Format(_bridge.LocalizerManager, "Arenas_Tag_Afk");
+            state.Afk      = true;
+            state.ArenaTag = Loc.Format(_bridge.LocalizerManager, "Arenas_Tag_Afk");
+
+            // Mirror the disconnect path: remove from challenge + arena, then check round termination.
+            _queueModule.ChallengeService.RemoveForSlot(slot);
+            _arenaManager.RemoveSlotFromAllArenas(slot);
             QueueManager.RequeueTail(slot);
 
             Loc.Chat(_bridge.LocalizerManager, client, "Arenas_Chat_AfkEnabled");
+            _roundFlow.TerminateRoundIfPossible();
             return new HookReturnValue<bool>(EHookAction.Ignored);
         }
 

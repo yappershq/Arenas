@@ -13,7 +13,7 @@ public sealed class CommandSettings
     [JsonPropertyName("challenge-accept-commands")] public List<string> ChallengeAcceptCommands  { get; set; } = ["caccept", "capprove"];
     [JsonPropertyName("challenge-decline-commands")] public List<string> ChallengeDeclineCommands { get; set; } = ["cdecline", "cdeny"];
     [JsonPropertyName("admin-commands")]        public List<string> AdminCommands           { get; set; } = ["arenas"];
-    [JsonPropertyName("admin-permission")]      public string       AdminPermission         { get; set; } = "@css/generic";
+    [JsonPropertyName("admin-permission")]      public string       AdminPermission         { get; set; } = "@arenas/admin";
     [JsonPropertyName("center-menu-mode")]      public bool CenterMenuMode      { get; set; } = true;
     [JsonPropertyName("center-announce-mode")]  public bool CenterAnnounceMode  { get; set; } = true;
     [JsonPropertyName("freeze-in-center-menu")] public bool FreezeInMenu       { get; set; } = true;

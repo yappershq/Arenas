@@ -8,6 +8,7 @@ using Arenas.Loadout;
 using Arenas.Plugins;
 using Arenas.Queue;
 using Arenas.Rounds;
+using Arenas.Shared;
 using Arenas.Utils;
 using Microsoft.Extensions.Logging;
 using Sharp.Shared.Enums;
@@ -43,6 +44,7 @@ internal sealed class RoundFlowModule : IModule, IEventListener
     private readonly Api.ApiModule            _api;
     private readonly ArenasApi                _arenasApi;
     private readonly RoundTypeRegistry        _registry;
+    private readonly IArenasVipProvider       _vip;
 
     private QueueManager     QueueManager     => _queueModule.QueueManager;
     private ChallengeService ChallengeService => _queueModule.ChallengeService;
@@ -62,7 +64,8 @@ internal sealed class RoundFlowModule : IModule, IEventListener
         IArenasStore             store,
         Api.ApiModule            api,
         ArenasApi                arenasApi,
-        RoundTypeRegistry        registry)
+        RoundTypeRegistry        registry,
+        IArenasVipProvider       vip)
     {
         _logger       = logger;
         _bridge       = bridge;
@@ -74,6 +77,7 @@ internal sealed class RoundFlowModule : IModule, IEventListener
         _api          = api;
         _arenasApi    = arenasApi;
         _registry     = registry;
+        _vip          = vip;
     }
 
     public bool Init()
@@ -202,8 +206,9 @@ internal sealed class RoundFlowModule : IModule, IEventListener
 
         _arenaManager.Shuffle();
 
-        // Prioritize real players over bots for arena seating (K4: OrderBy(IsBot)).
-        notAfk = new Queue<PlayerSlot>(notAfk.OrderBy(IsBotSlot));
+        // VIP players seat first, then regular humans, bots last (K4: OrderBy(IsBot) + VIP priority).
+        notAfk = new Queue<PlayerSlot>(notAfk.OrderBy(slot =>
+            IsVipSlot(slot) ? 0 : IsBotSlot(slot) ? 2 : 1));
 
         // Drain accepted duel challenges — they get seated FIRST (one arena each), removed from the
         // ladder queue, before normal ladder pairing (K4 PluginEvents: challenges handled per arena
@@ -236,13 +241,26 @@ internal sealed class RoundFlowModule : IModule, IEventListener
             else if (notAfk.Count >= 1)
             {
                 var p1 = notAfk.Dequeue();
-                PlayerSlot? p2 = notAfk.TryDequeue(out var p2Slot) ? p2Slot : null;
 
-                var roundType = GetCommonRoundType(
-                    GetEnabledTypes(p1),
-                    p2 is { } p2s ? GetEnabledTypes(p2s) : null);
+                // Peek the next queued player to pick a shared round type — which may be an NvN
+                // (2v2/3v3) type. TeamSize then decides how many we seat per side.
+                var p2peekPrefs = notAfk.Count > 0 ? GetEnabledTypes(notAfk.Peek()) : null;
+                var roundType   = GetCommonRoundType(GetEnabledTypes(p1), p2peekPrefs);
 
-                AssignArena(arena, [p1], p2 is { } p2v ? [p2v] : null, roundType, displayIndex);
+                var teamSize = roundType?.TeamSize ?? 1;
+                // Not enough queued to fill both sides of the NvN round → downgrade to 1v1.
+                if (teamSize > 1 && 1 + notAfk.Count < 2 * teamSize)
+                {
+                    teamSize  = 1;
+                    roundType = GetCommonRoundType(GetEnabledTypes(p1), p2peekPrefs, maxTeamSize: 1);
+                }
+
+                var team1 = new List<PlayerSlot>(teamSize) { p1 };
+                while (team1.Count < teamSize && notAfk.Count > 0) team1.Add(notAfk.Dequeue());
+                var team2 = new List<PlayerSlot>(teamSize);
+                while (team2.Count < teamSize && notAfk.Count > 0) team2.Add(notAfk.Dequeue());
+
+                AssignArena(arena, team1, team2.Count > 0 ? team2 : null, roundType, displayIndex);
                 displayIndex++;
             }
             else
@@ -259,6 +277,18 @@ internal sealed class RoundFlowModule : IModule, IEventListener
             var state = QueueManager.GetOrCreateState(slot);
             state.ArenaTag = Loc.Format(_bridge.LocalizerManager, "Arenas_Tag_Waiting");
             QueueManager.RequeueTail(slot);
+        }
+
+        // Re-queue accepted challenges that didn't fit into an arena (more challenges than arenas).
+        // Both slots were pulled out of notAfk but never seated — re-insert them into the waiting
+        // queue and re-register the challenge as accepted so it fires next round.
+        while (challengeIndex < challenges.Count)
+        {
+            var c = challenges[challengeIndex++];
+            QueueManager.RequeueTail(c.Challenger);
+            QueueManager.RequeueTail(c.Target);
+            var renewed = ChallengeService.Add(c.Challenger, c.Target);
+            if (renewed is not null) renewed.Accepted = true;
         }
     }
 
@@ -294,6 +324,10 @@ internal sealed class RoundFlowModule : IModule, IEventListener
             if (client is not { IsInGame: true }) continue;
             var controller = client.GetPlayerController();
             if (controller is null) continue;
+
+            // NvN with more team members than spawn points in this cluster: refill the pool
+            // (players may share a spawn) instead of Next(0) throwing ArgumentOutOfRange.
+            if (spawnPool.Count == 0) spawnPool.AddRange(spawns);
 
             var idx = Random.Shared.Next(spawnPool.Count);
             arena.SpawnAssignment[slot] = spawnPool[idx];
@@ -343,6 +377,12 @@ internal sealed class RoundFlowModule : IModule, IEventListener
     private bool IsBotSlot(PlayerSlot slot)
         => _bridge.ClientManager.GetGameClient(slot) is { IsFakeClient: true };
 
+    private bool IsVipSlot(PlayerSlot slot)
+    {
+        var client = _bridge.ClientManager.GetGameClient(slot);
+        return client is { IsInGame: true, IsFakeClient: false } && _vip.IsVip(client.SteamId);
+    }
+
     private HashSet<int> GetEnabledTypes(PlayerSlot slot)
     {
         var client = _bridge.ClientManager.GetGameClient(slot);
@@ -352,18 +392,20 @@ internal sealed class RoundFlowModule : IModule, IEventListener
 
     /// <summary>K4's GetCommonRoundType: intersection of both players' enabled 1v1 round types,
     /// random pick; falls back to the configured default round, then to any 1v1 round type.</summary>
-    private RoundType? GetCommonRoundType(HashSet<int> prefs1, HashSet<int>? prefs2)
+    // maxTeamSize caps the selectable round types (int.MaxValue = allow NvN). The caller downgrades
+    // to maxTeamSize:1 when there aren't enough queued players to fill both sides of an NvN round.
+    private RoundType? GetCommonRoundType(HashSet<int> prefs1, HashSet<int>? prefs2, int maxTeamSize = int.MaxValue)
     {
         var common = prefs2 is null ? prefs1 : new HashSet<int>(prefs1.Intersect(prefs2));
-        var usable = _registry.All.Where(r => r.TeamSize < 2 && common.Contains(r.Id)).ToList();
+        var usable = _registry.All.Where(r => r.TeamSize <= maxTeamSize && common.Contains(r.Id)).ToList();
 
         if (usable.Count > 0) return usable[Random.Shared.Next(usable.Count)];
 
         var defaultName = _config.Config.DefaultWeaponSettings.DefaultRound;
-        var defaultType = _registry.All.FirstOrDefault(r => r.Name == defaultName);
+        var defaultType = _registry.All.FirstOrDefault(r => r.Name == defaultName && r.TeamSize <= maxTeamSize);
         if (defaultType is not null) return defaultType;
 
-        var any = _registry.All.Where(r => r.TeamSize < 2).ToList();
+        var any = _registry.All.Where(r => r.TeamSize <= maxTeamSize).ToList();
         return any.Count > 0 ? any[Random.Shared.Next(any.Count)] : null;
     }
 
@@ -374,7 +416,15 @@ internal sealed class RoundFlowModule : IModule, IEventListener
         _isBetweenRounds = true;
 
         foreach (var arena in _arenaManager.Arenas)
+        {
+            // Fire the special-round teardown once per arena BEFORE results/teams are recomputed.
+            // This is the OnEnd half of the IArenasShared round-type contract — e.g. NoCrosshair
+            // restores m_iHideHUD here. Without it every special-round cleanup silently never runs.
+            if (arena.CurrentRoundType?.OnEnd is { } onEnd)
+                onEnd(ToSlots(arena.Team1), ToSlots(arena.Team2));
+
             ComputeArenaResult(arena);
+        }
     }
 
     private void ComputeArenaResult(ArenaSlot arena)
@@ -449,9 +499,7 @@ internal sealed class RoundFlowModule : IModule, IEventListener
         {
             if (roundType.OnStart is not null)
             {
-                var team1Ids = ToSteamIds(arena.Team1);
-                var team2Ids = ToSteamIds(arena.Team2);
-                roundType.OnStart(team1Ids, team2Ids);
+                roundType.OnStart(ToSlots(arena.Team1), ToSlots(arena.Team2));
             }
             else
             {
@@ -460,14 +508,12 @@ internal sealed class RoundFlowModule : IModule, IEventListener
         }
     }
 
-    private SteamID[] ToSteamIds(List<PlayerSlot>? slots)
+    /// <summary>Convert a slot list to a PlayerSlot array for ArenaRoundCallback. Bots are included
+    /// by slot so special-round plugins can resolve them (SteamID=0 is ambiguous for bots).</summary>
+    private static PlayerSlot[] ToSlots(List<PlayerSlot>? slots)
     {
         if (slots is null) return [];
-        return slots
-            .Select(s => _bridge.ClientManager.GetGameClient(s))
-            .Where(c => c is not null)
-            .Select(c => c!.SteamId)
-            .ToArray();
+        return [.. slots];
     }
 
     // ── PlayerKilledPost: deferred TerminateRoundIfPossible ─────────────────

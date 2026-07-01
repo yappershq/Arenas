@@ -5,10 +5,10 @@ namespace Arenas.Shared;
 /// <summary>
 /// Callback signature for per-arena special-round start / end. Fired once per concurrent arena
 /// instance when a round of the registered type begins/ends in that arena, scoped to that arena's
-/// two teams. SteamID lists are the occupants of each side — re-resolve <c>IGameClient</c> by id in
-/// the callback; never store clients/pawns across the callback.
+/// two teams. Slots (not SteamIDs) are passed so bots (SteamID = 0) are resolvable — re-resolve
+/// <c>IGameClient</c> by slot in the callback; never store clients/pawns across the callback.
 /// </summary>
-public delegate void ArenaRoundCallback(SteamID[] team1, SteamID[] team2);
+public delegate void ArenaRoundCallback(PlayerSlot[] team1, PlayerSlot[] team2);
 
 /// <summary>
 /// Public contract published by Arenas.Core in <c>PostInit</c> via

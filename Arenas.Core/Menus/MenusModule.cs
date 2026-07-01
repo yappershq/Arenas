@@ -70,6 +70,7 @@ internal sealed class MenusModule : IModule
 
     public void Shutdown()
     {
+        _arenasApi.OnRoundTypesChanged -= RebuildRoundsMenu;
         GunsMenu    = null;
         RoundsMenu  = null;
     }

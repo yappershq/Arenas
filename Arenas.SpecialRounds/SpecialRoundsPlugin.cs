@@ -143,7 +143,7 @@ public sealed class SpecialRoundsPlugin : IModSharpModule, IEventListener
 
     // ── HeadshotOnly ────────────────────────────────────────────────────────────
 
-    private void HeadshotOnlyStart(SteamID[] team1, SteamID[] team2, string weapon)
+    private void HeadshotOnlyStart(PlayerSlot[] team1, PlayerSlot[] team2, string weapon)
     {
         // OnStart fires once per PLAYER spawn but receives the whole roster — dedupe so each player is
         // equipped exactly once per round (marking the slot; skip already-marked slots).
@@ -174,7 +174,7 @@ public sealed class SpecialRoundsPlugin : IModSharpModule, IEventListener
 
     // ── NoCrosshair ──────────────────────────────────────────────────────────────
 
-    private void NoCrosshairStart(SteamID[] team1, SteamID[] team2)
+    private void NoCrosshairStart(PlayerSlot[] team1, PlayerSlot[] team2)
     {
         foreach (var (pawn, _) in FreshPawns(team1, team2, SpecialRoundKind.NoCrosshair))
         {
@@ -183,7 +183,7 @@ public sealed class SpecialRoundsPlugin : IModSharpModule, IEventListener
         }
     }
 
-    private void NoCrosshairEnd(SteamID[] team1, SteamID[] team2)
+    private void NoCrosshairEnd(PlayerSlot[] team1, PlayerSlot[] team2)
     {
         foreach (var (pawn, slot) in ResolvePawns(team1).Concat(ResolvePawns(team2)))
         {
@@ -194,7 +194,7 @@ public sealed class SpecialRoundsPlugin : IModSharpModule, IEventListener
 
     // ── Nades ────────────────────────────────────────────────────────────────────
 
-    private void NadesStart(SteamID[] team1, SteamID[] team2)
+    private void NadesStart(PlayerSlot[] team1, PlayerSlot[] team2)
     {
         foreach (var (pawn, _) in FreshPawns(team1, team2, SpecialRoundKind.Nades))
         {
@@ -206,7 +206,7 @@ public sealed class SpecialRoundsPlugin : IModSharpModule, IEventListener
 
     // ── OneTap ───────────────────────────────────────────────────────────────────
 
-    private void OneTapStart(SteamID[] team1, SteamID[] team2)
+    private void OneTapStart(PlayerSlot[] team1, PlayerSlot[] team2)
     {
         foreach (var (pawn, slot) in FreshPawns(team1, team2, SpecialRoundKind.OneTap))
         {
@@ -260,7 +260,7 @@ public sealed class SpecialRoundsPlugin : IModSharpModule, IEventListener
 
     // ── helpers ──────────────────────────────────────────────────────────────────
 
-    private void ClearRound(SteamID[] team1, SteamID[] team2)
+    private void ClearRound(PlayerSlot[] team1, PlayerSlot[] team2)
     {
         foreach (var (_, slot) in ResolvePawns(team1).Concat(ResolvePawns(team2)))
             _state.Clear(slot);
@@ -270,7 +270,7 @@ public sealed class SpecialRoundsPlugin : IModSharpModule, IEventListener
     /// Live pawns that are NOT yet marked for this round kind — marks them as a side effect. Dedupes
     /// the once-per-player OnStart fan-out so each player is equipped exactly once per round.
     /// </summary>
-    private IEnumerable<(IPlayerPawn Pawn, PlayerSlot Slot)> FreshPawns(SteamID[] team1, SteamID[] team2, SpecialRoundKind kind)
+    private IEnumerable<(IPlayerPawn Pawn, PlayerSlot Slot)> FreshPawns(PlayerSlot[] team1, PlayerSlot[] team2, SpecialRoundKind kind)
     {
         foreach (var (pawn, slot) in ResolvePawns(team1).Concat(ResolvePawns(team2)))
         {
@@ -280,14 +280,15 @@ public sealed class SpecialRoundsPlugin : IModSharpModule, IEventListener
         }
     }
 
-    /// <summary>Re-resolve live pawns by SteamID → (pawn, slot). Never stores a pawn across a callback.</summary>
-    private IEnumerable<(IPlayerPawn Pawn, PlayerSlot Slot)> ResolvePawns(SteamID[] ids)
+    /// <summary>Re-resolve live pawns by PlayerSlot → (pawn, slot). Slot-keyed so bots (SteamID=0) are
+    /// handled correctly — GetGameClient(PlayerSlot) works for both humans and bots.</summary>
+    private IEnumerable<(IPlayerPawn Pawn, PlayerSlot Slot)> ResolvePawns(PlayerSlot[] slots)
     {
-        foreach (var id in ids)
+        foreach (var slot in slots)
         {
-            if (_clientManager.GetGameClient(id) is not { IsInGame: true } client) continue;
+            if (_clientManager.GetGameClient(slot) is not { IsInGame: true } client) continue;
             if (client.GetPlayerController()?.GetPlayerPawn() is not { IsAlive: true } pawn) continue;
-            yield return (pawn, client.Slot);
+            yield return (pawn, slot);
         }
     }
 

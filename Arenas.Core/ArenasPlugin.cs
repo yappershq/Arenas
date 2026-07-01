@@ -59,9 +59,24 @@ public sealed class ArenasPlugin : IModSharpModule
 
     public bool Init()
     {
+        var ok = true;
         foreach (var module in _provider.GetServices<IModule>())
-            CallSafe(module, static m => { m.Init(); }, "Init");
-        return true;
+        {
+            try
+            {
+                if (!module.Init())
+                {
+                    _logger.LogError("[Arenas] Module {Module} failed Init().", module.GetType().Name);
+                    ok = false;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[Arenas] Error in Init for {Module}", module.GetType().Name);
+                ok = false;
+            }
+        }
+        return ok;
     }
 
     /// <summary>Publish IArenasShared so external plugins can subscribe in their OAM.</summary>
