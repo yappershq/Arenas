@@ -109,9 +109,26 @@ dotnet build -c Release
 
 Outputs `.build/modules/Arenas.Core/Arenas.dll`, `.build/shared/Arenas.Shared/Arenas.Shared.dll`, and `.build/modules/Arenas.SpecialRounds/Arenas.SpecialRounds.dll`.
 
+## 🔗 Integrations
+
+### Ranking — use LevelRank
+Arenas ships **no ranking of its own** — pair it with the house **LevelRank** plugin, which persists
+points (MySQL) and scores by kills/deaths. On an arena server set the round win/loss scores to **0**
+in `levelrank.jsonc` (`RoundWins` / `RoundLosses` → 0): global round win/loss is meaningless when
+teams are re-paired every round, whereas per-kill scoring already ranks players correctly. Arenas
+does not read LevelRank scores (pairing is a winner-ladder, not skill-seeded), so no wiring is needed
+— just run both. Note: if LevelRank's scoreboard module is on, it and Arenas both write `m_iScore`;
+prefer disabling LevelRank's scoreboard spoof on arena servers so the arena ladder display wins.
+
+### VIP — optional `Arenas.Vip` module
+Core is **VIP-agnostic** (never admin flags): VIP goes through the `IArenasVipProvider` contract,
+whose default says nobody is VIP. Deploy the optional **`Arenas.Vip`** module (bridges the house
+`Vip.Shared` `IVipShared`) on servers that run the Vip plugin — Core adopts it automatically via the
+module registry. VIP-less servers just omit the module.
+
 ## 🙏 Credits
 
-Port of [KitsuneLab-Development/K4-Arenas](https://github.com/KitsuneLab-Development/K4-Arenas) and [Letaryat/K4-Arenas-Special-Rounds](https://github.com/Letaryat/K4-Arenas-Special-Rounds).
+Port of [KitsuneLab-Development/K4-Arenas](https://github.com/KitsuneLab-Development/K4-Arenas) and [Letaryat/K4-Arenas-Special-Rounds](https://github.com/Letaryat/K4-Arenas-Special-Rounds). Ranking via [LevelRank](https://github.com/yappershq); VIP via the house Vip plugin.
 
 ---
 

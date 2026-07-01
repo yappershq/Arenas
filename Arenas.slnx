@@ -2,4 +2,5 @@
   <Project Path="Arenas.Shared/Arenas.Shared.csproj" />
   <Project Path="Arenas.Core/Arenas.Core.csproj" />
   <Project Path="Arenas.SpecialRounds/Arenas.SpecialRounds.csproj" />
+  <Project Path="Arenas.Vip/Arenas.Vip.csproj" />
 </Solution>

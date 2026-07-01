@@ -12,6 +12,13 @@ namespace Arenas.Shared;
 /// </summary>
 public interface IArenasVipProvider
 {
+    /// <summary>
+    /// Registry identity. An external Arenas.Vip plugin publishes an implementation under this
+    /// identity via <c>RegisterSharpModuleInterface</c>; Core's DefaultVipProvider looks it up in
+    /// OnAllModulesLoaded and delegates to it when present (else nobody is VIP).
+    /// </summary>
+    const string Identity = nameof(IArenasVipProvider);
+
     /// <summary>Returns true if the player has Arenas VIP status (e.g. queue priority).</summary>
     bool IsVip(SteamID steamId);
 }

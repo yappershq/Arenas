@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>Arenas.Vip</AssemblyName>
+    <RootNamespace>Arenas.Vip</RootNamespace>
+  </PropertyGroup>
+
+  <!--
+    Optional third-party module: bridges the house Vip plugin into Arenas' VIP-agnostic
+    IArenasVipProvider contract. Deploy ONLY on servers that also run the Vip plugin — Arenas.Core
+    never references Vip.Shared and works fine without this module (default: nobody is VIP).
+    Vip.Shared referenced by absolute path (sibling repo, not a NuGet package), Private="false" so
+    Vip.Shared.dll is NOT copied into this module's output — it must resolve against the copy
+    Vip.Core already ships to {sharp}/shared/ (feedback_modsharp_foreign_shared_refasm_copy): a
+    duplicate under a different ALC breaks type identity across the SharpModuleManager boundary.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="/home/claude/cs2-vip/Vip.Shared/Vip.Shared.csproj" Private="false" />
+    <ProjectReference Include="..\Arenas.Shared\Arenas.Shared.csproj" />
+  </ItemGroup>
+</Project>
