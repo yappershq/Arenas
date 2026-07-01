@@ -1,0 +1,20 @@
+{
+  "Arenas_Round_OnlyHS_Ak": {
+    "en-US": "Headshot Only (AK47)"
+  },
+  "Arenas_Round_OnlyHS_Usp": {
+    "en-US": "Headshot Only (USP)"
+  },
+  "Arenas_Round_OnlyHS_Scout": {
+    "en-US": "Headshot Only (Scout)"
+  },
+  "Arenas_Round_NoCrosshair": {
+    "en-US": "No Crosshair"
+  },
+  "Arenas_Round_Nades": {
+    "en-US": "Grenades"
+  },
+  "Arenas_Round_OneTap": {
+    "en-US": "One Tap"
+  }
+}

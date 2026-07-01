@@ -7,6 +7,7 @@ using Arenas.Database;
 using Arenas.Loadout;
 using Arenas.Plugins;
 using Arenas.Queue;
+using Arenas.Rounds;
 using Arenas.Utils;
 using Microsoft.Extensions.Logging;
 using Sharp.Shared.Enums;
@@ -41,12 +42,12 @@ internal sealed class RoundFlowModule : IModule, IEventListener
     private readonly IArenasStore             _store;
     private readonly Api.ApiModule            _api;
     private readonly ArenasApi                _arenasApi;
+    private readonly RoundTypeRegistry        _registry;
 
     private QueueManager     QueueManager     => _queueModule.QueueManager;
     private ChallengeService ChallengeService => _queueModule.ChallengeService;
 
     private bool _isBetweenRounds;
-    private List<RoundType> _roundTypes = [];
 
     int IEventListener.ListenerVersion  => IEventListener.ApiVersion;
     int IEventListener.ListenerPriority => 0;
@@ -60,7 +61,8 @@ internal sealed class RoundFlowModule : IModule, IEventListener
         LoadoutModule            loadout,
         IArenasStore             store,
         Api.ApiModule            api,
-        ArenasApi                arenasApi)
+        ArenasApi                arenasApi,
+        RoundTypeRegistry        registry)
     {
         _logger       = logger;
         _bridge       = bridge;
@@ -71,13 +73,15 @@ internal sealed class RoundFlowModule : IModule, IEventListener
         _store        = store;
         _api          = api;
         _arenasApi    = arenasApi;
+        _registry     = registry;
     }
 
     public bool Init()
     {
-        _roundTypes = _config.Config.RoundSettings.Count > 0
+        var baseTypes = _config.Config.RoundSettings.Count > 0
             ? RoundTypeCatalog.FromConfig(_config.Config.RoundSettings)
             : RoundTypeCatalog.Defaults();
+        _registry.Reset(baseTypes);
         return true;
     }
 
@@ -98,6 +102,10 @@ internal sealed class RoundFlowModule : IModule, IEventListener
         // Fold in any special round types registered by external plugins (Arenas.SpecialRounds et al).
         RefreshRoundTypesWithApi();
 
+        // Re-fold whenever an addon (un)registers a round type — OnAllModulesLoaded order across plugins
+        // is undefined, so an addon may register AFTER this ran. Chain (+=) so MenusModule can also subscribe.
+        _arenasApi.OnRoundTypesChanged += RefreshRoundTypesWithApi;
+
         _arenasApi.TerminateRound = TerminateRoundIfPossible;
     }
 
@@ -115,11 +123,12 @@ internal sealed class RoundFlowModule : IModule, IEventListener
             ? RoundTypeCatalog.FromConfig(_config.Config.RoundSettings)
             : RoundTypeCatalog.Defaults();
 
-        var special = _api.GetRegisteredRoundTypes();
-        _roundTypes = [.. baseTypes, .. special];
+        _registry.Reset(baseTypes);
+        foreach (var special in _api.GetRegisteredRoundTypes())
+            _registry.AppendSpecial(special);
     }
 
-    public IReadOnlyList<RoundType> RoundTypes => _roundTypes;
+    public IReadOnlyList<RoundType> RoundTypes => _registry.All;
 
     // ── IEventListener ────────────────────────────────────────────────────
 
@@ -260,7 +269,7 @@ internal sealed class RoundFlowModule : IModule, IEventListener
         arena.ArenaId          = displayId;
         arena.Team1             = team1;
         arena.Team2             = team2;
-        arena.CurrentRoundType = roundType ?? (_roundTypes.Count > 0 ? _roundTypes[0] : null);
+        arena.CurrentRoundType = roundType ?? (_registry.All.Count > 0 ? _registry.All[0] : null);
         arena.Result           = new ArenaResult(ArenaResultType.Empty, null, null);
         arena.IsChallenge      = isChallenge;
 
@@ -337,8 +346,8 @@ internal sealed class RoundFlowModule : IModule, IEventListener
     private HashSet<int> GetEnabledTypes(PlayerSlot slot)
     {
         var client = _bridge.ClientManager.GetGameClient(slot);
-        if (client is null) return [.. _roundTypes.Where(r => r.EnabledByDefault).Select(r => r.Id)];
-        return _store.GetEnabledRoundTypeIds(client.SteamId, _roundTypes);
+        if (client is null) return [.. _registry.All.Where(r => r.EnabledByDefault).Select(r => r.Id)];
+        return _store.GetEnabledRoundTypeIds(client.SteamId, _registry.All);
     }
 
     /// <summary>K4's GetCommonRoundType: intersection of both players' enabled 1v1 round types,
@@ -346,15 +355,15 @@ internal sealed class RoundFlowModule : IModule, IEventListener
     private RoundType? GetCommonRoundType(HashSet<int> prefs1, HashSet<int>? prefs2)
     {
         var common = prefs2 is null ? prefs1 : new HashSet<int>(prefs1.Intersect(prefs2));
-        var usable = _roundTypes.Where(r => r.TeamSize < 2 && common.Contains(r.Id)).ToList();
+        var usable = _registry.All.Where(r => r.TeamSize < 2 && common.Contains(r.Id)).ToList();
 
         if (usable.Count > 0) return usable[Random.Shared.Next(usable.Count)];
 
         var defaultName = _config.Config.DefaultWeaponSettings.DefaultRound;
-        var defaultType = _roundTypes.FirstOrDefault(r => r.Name == defaultName);
+        var defaultType = _registry.All.FirstOrDefault(r => r.Name == defaultName);
         if (defaultType is not null) return defaultType;
 
-        var any = _roundTypes.Where(r => r.TeamSize < 2).ToList();
+        var any = _registry.All.Where(r => r.TeamSize < 2).ToList();
         return any.Count > 0 ? any[Random.Shared.Next(any.Count)] : null;
     }
 

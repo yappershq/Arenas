@@ -1,224 +1,194 @@
 using System.Collections.Generic;
 using System.Linq;
-using Arenas.Arena;
-using Arenas.Config;
 using Arenas.Database;
+using Arenas.Loadout;
 using Arenas.Plugins;
-using Arenas.RoundFlow;
+using Arenas.Rounds;
 using Arenas.Shared;
 using Arenas.Utils;
+using Arenas.Weapons;
 using Microsoft.Extensions.Logging;
+using Sharp.Modules.LocalizerManager.Shared;
 using Sharp.Modules.MenuManager.Shared;
-using Sharp.Shared.Objects;
 
 namespace Arenas.Menus;
 
 /// <summary>
-/// Round-type and weapon preference menus. House <see cref="IMenuManager"/> nested SubMenu trees —
-/// no CSS linear ChatMenu/ScrollableMenu paging. Menus are built per-open (round types + per-player
-/// prefs are runtime state), using per-item title FACTORIES so each item's label reflects the
-/// viewing player's current preference and localizes to their culture. Toggling an item flips the
-/// stored preference (via <see cref="IArenasStore"/>) and calls <c>controller.Refresh()</c> to redraw.
+/// Builds and caches the two player-preference menus:
+///   <see cref="GunsMenu"/>   — nested SubMenu tree (category → weapon list + Random)
+///   <see cref="RoundsMenu"/> — flat toggle list (enabled/disabled per round type)
 ///
-/// Degrades to a no-op (with a chat hint) when IMenuManager isn't installed.
+/// Both use factory lambdas so title/state are evaluated lazily per-client at display time.
+/// Properties are null before OnAllSharpModulesLoaded. CommandsModule checks
+/// <see cref="InterfaceBridge.MenuManager"/> before calling DisplayMenu.
+/// Call <see cref="RebuildRoundsMenu"/> after external specials are added/removed.
 /// </summary>
 internal sealed class MenusModule : IModule
 {
-    private readonly InterfaceBridge     _bridge;
     private readonly ILogger<MenusModule> _logger;
-    private readonly ConfigModule        _config;
-    private readonly RoundFlowModule     _roundFlow;
-    private readonly IArenasStore        _store;
+    private readonly IArenasStore         _store;
+    private readonly InterfaceBridge      _bridge;
+    private readonly RoundTypeRegistry    _registry;
+    private readonly ArenasApi            _arenasApi;
+
+    /// <summary>Cached weapon-preference menu (root → 6 category sub-menus).</summary>
+    public Menu? GunsMenu   { get; private set; }
+
+    /// <summary>Cached round-preference toggle menu.</summary>
+    public Menu? RoundsMenu { get; private set; }
 
     public MenusModule(
-        InterfaceBridge     bridge,
-        ILogger<MenusModule> logger,
-        ConfigModule        config,
-        RoundFlowModule     roundFlow,
-        IArenasStore        store)
+        InterfaceBridge        bridge,
+        ILogger<MenusModule>   logger,
+        IArenasStore           store,
+        RoundTypeRegistry      registry,
+        ArenasApi              arenasApi)
     {
         _bridge    = bridge;
         _logger    = logger;
-        _config    = config;
-        _roundFlow = roundFlow;
         _store     = store;
+        _registry  = registry;
+        _arenasApi = arenasApi;
     }
 
     public bool Init() => true;
     public void OnPostInit() { }
-    public void OnAllSharpModulesLoaded() { }
-    public void Shutdown() { }
 
-    // ── round preference menu ─────────────────────────────────────────────────
-
-    public void OpenRoundPreferenceMenu(IGameClient client)
+    public void OnAllSharpModulesLoaded()
     {
-        if (_bridge.MenuManager is not { } mm)
+        if (_bridge.MenuManager is null)
+            _logger.LogWarning("[Arenas] IMenuManager not installed — gun/rounds preference menus disabled.");
+
+        BuildGunsMenu();
+        BuildRoundsMenu();
+
+        // Rebuild the rounds menu when an addon (un)registers a round type (order-independent — see
+        // ArenasApi.OnRoundTypesChanged). RoundFlowModule subscribes first (DI order), so the registry
+        // is already refreshed by the time this rebuild runs.
+        _arenasApi.OnRoundTypesChanged += RebuildRoundsMenu;
+    }
+
+    public void Shutdown()
+    {
+        GunsMenu    = null;
+        RoundsMenu  = null;
+    }
+
+    // ── GunsMenu ─────────────────────────────────────────────────────────────
+    // Root: Weapon Preferences
+    //   Rifle / Sniper / SMG / LMG / Shotgun / Pistol   (each is a SubMenu)
+    //   Exit
+
+    private void BuildGunsMenu()
+    {
+        var lm = _bridge.LocalizerManager;
+
+        var rifleMenu   = BuildCategoryMenu(WeaponType.Rifle,   "Arenas_Round_Rifle",   lm);
+        var sniperMenu  = BuildCategoryMenu(WeaponType.Sniper,  "Arenas_Round_Sniper",  lm);
+        var smgMenu     = BuildCategoryMenu(WeaponType.Smg,     "Arenas_Round_Smg",     lm);
+        var lmgMenu     = BuildCategoryMenu(WeaponType.Lmg,     "Arenas_Round_Lmg",     lm);
+        var shotgunMenu = BuildCategoryMenu(WeaponType.Shotgun, "Arenas_Round_Shotgun", lm);
+        var pistolMenu  = BuildCategoryMenu(WeaponType.Pistol,  "Arenas_Round_Pistol",  lm);
+
+        GunsMenu = Menu.Create()
+            .Title(client => Loc.Str(lm, client, "Arenas_Menu_WeaponPref_Title"))
+            .SubMenu(client => Loc.Str(lm, client, "Arenas_Round_Rifle"),   rifleMenu)
+            .SubMenu(client => Loc.Str(lm, client, "Arenas_Round_Sniper"),  sniperMenu)
+            .SubMenu(client => Loc.Str(lm, client, "Arenas_Round_Smg"),     smgMenu)
+            .SubMenu(client => Loc.Str(lm, client, "Arenas_Round_Lmg"),     lmgMenu)
+            .SubMenu(client => Loc.Str(lm, client, "Arenas_Round_Shotgun"), shotgunMenu)
+            .SubMenu(client => Loc.Str(lm, client, "Arenas_Round_Pistol"),  pistolMenu)
+            .ExitItem(client => Loc.Str(lm, client, "Arenas_Menu_Exit"))
+            .Build();
+    }
+
+    /// <summary>
+    /// Category submenu: Random at top (clears pref), then all weapons in the category.
+    /// Selecting a weapon stores the preference and navigates back.
+    /// </summary>
+    private Menu BuildCategoryMenu(WeaponType type, string titleKey, ILocalizerManager? lm)
+    {
+        var weapons      = WeaponCatalog.GetWeaponList(type);
+        var capturedType = type;
+
+        var builder = Menu.Create()
+            .Title(client => Loc.Str(lm, client, titleKey));
+
+        // "Random" — clear stored preference (LoadoutModule picks random when pref is null).
+        builder.Item(
+            client => Loc.Str(lm, client, "Arenas_General_Random"),
+            ctrl =>
+            {
+                _store.SetWeaponPreference(ctrl.Client.SteamId, capturedType, null);
+                Loc.Chat(lm, ctrl.Client, "Arenas_Chat_WeaponPreferencesRemoved",
+                    Loc.Str(lm, ctrl.Client, titleKey));
+                ctrl.GoBack();
+            });
+
+        foreach (var classname in weapons)
         {
-            Loc.Chat(_bridge.LocalizerManager, client, "Arenas_Chat_MenusUnavailable");
-            return;
+            var cap = classname;
+            builder.Item(
+                CsItemNames.GetDisplayName(cap),
+                ctrl =>
+                {
+                    _store.SetWeaponPreference(ctrl.Client.SteamId, capturedType, cap);
+                    Loc.Chat(lm, ctrl.Client, "Arenas_Chat_WeaponPreferencesAdded",
+                        CsItemNames.GetDisplayName(cap));
+                    ctrl.GoBack();
+                });
         }
 
-        var lm       = _bridge.LocalizerManager;
-        var steamId  = client.SteamId;
-        var roundTypes = _roundFlow.RoundTypes;
+        builder.BackItem(client => Loc.Str(lm, client, "Arenas_Menu_Back"));
+        return builder.Build();
+    }
 
-        var menu = new Menu();
-        menu.SetTitle(c => Loc.Str(lm, c, "Arenas_Menu_RoundPref_Title"));
+    // ── RoundsMenu ────────────────────────────────────────────────────────────
+    // Flat toggle list. At-least-one guard: the last enabled round type cannot be disabled.
+    // Title factory reads pref state fresh each display — cookies are synchronous, no async needed.
+
+    /// <summary>Rebuild the rounds menu after external specials are added/removed.</summary>
+    public void RebuildRoundsMenu() => BuildRoundsMenu();
+
+    private void BuildRoundsMenu()
+    {
+        var lm         = _bridge.LocalizerManager;
+        var roundTypes = _registry.All.ToList(); // snapshot at build time
+
+        var builder = Menu.Create()
+            .Title(client => Loc.Str(lm, client, "Arenas_Menu_RoundPref_Title"));
 
         foreach (var rt in roundTypes)
         {
-            var roundType = rt; // capture
-            menu.AddItem(
-                c =>
+            var capturedRt = rt;
+            builder.Item(
+                // Title factory — re-reads enabled set per client at each display/refresh.
+                client =>
                 {
-                    var enabled = _store.GetEnabledRoundTypeIds(steamId, roundTypes).Contains(roundType.Id);
-                    var display = Loc.Str(lm, c, roundType.Name);
-                    return Loc.Str(lm, c,
-                        enabled ? "Arenas_Menu_RoundPref_ItemEnabled" : "Arenas_Menu_RoundPref_ItemDisabled",
-                        display);
+                    var enabledSet = _store.GetEnabledRoundTypeIds(client.SteamId, _registry.All);
+                    var enabled    = enabledSet.Contains(capturedRt.Id);
+                    var key        = enabled ? "Arenas_Menu_RoundPref_ItemEnabled" : "Arenas_Menu_RoundPref_ItemDisabled";
+                    return Loc.Str(lm, client, key, Loc.Str(lm, client, capturedRt.Name));
                 },
-                controller =>
+                ctrl =>
                 {
-                    ToggleRoundPreference(controller.Client, roundTypes, roundType);
-                    controller.Refresh();
+                    var steamId    = ctrl.Client.SteamId;
+                    var enabledSet = _store.GetEnabledRoundTypeIds(steamId, _registry.All);
+                    var isEnabled  = enabledSet.Contains(capturedRt.Id);
+
+                    if (isEnabled && enabledSet.Count <= 1)
+                    {
+                        Loc.Chat(lm, ctrl.Client, "Arenas_Chat_RoundPreferencesAtLeastOne");
+                        ctrl.Refresh();
+                        return;
+                    }
+
+                    _store.SetRoundTypeEnabled(steamId, capturedRt.Name, !isEnabled);
+                    ctrl.Refresh();
                 });
         }
 
-        menu.AddExitItem(c => Loc.Str(lm, c, "Arenas_Menu_Exit"));
-        mm.DisplayMenu(client, menu);
-    }
-
-    private void ToggleRoundPreference(IGameClient client, IReadOnlyList<RoundType> roundTypes, RoundType roundType)
-    {
-        var steamId = client.SteamId;
-        var enabledIds = _store.GetEnabledRoundTypeIds(steamId, roundTypes);
-        var currentlyEnabled = enabledIds.Contains(roundType.Id);
-
-        if (currentlyEnabled)
-        {
-            // "At least one round must stay enabled" guard (K4 ToggleRoundPreference).
-            if (enabledIds.Count <= 1)
-            {
-                Loc.Chat(_bridge.LocalizerManager, client, "Arenas_Chat_RoundPreferencesAtLeastOne");
-                return;
-            }
-            _store.SetRoundTypeEnabled(steamId, roundType.Name, false);
-            Loc.Chat(_bridge.LocalizerManager, client, "Arenas_Chat_RoundPreferencesRemoved",
-                Loc.Str(_bridge.LocalizerManager, client, roundType.Name));
-        }
-        else
-        {
-            _store.SetRoundTypeEnabled(steamId, roundType.Name, true);
-            Loc.Chat(_bridge.LocalizerManager, client, "Arenas_Chat_RoundPreferencesAdded",
-                Loc.Str(_bridge.LocalizerManager, client, roundType.Name));
-        }
-    }
-
-    // ── weapon preference menu (category → weapon submenu) ────────────────────
-
-    public void OpenWeaponPreferenceMenu(IGameClient client)
-    {
-        if (_bridge.MenuManager is not { } mm)
-        {
-            Loc.Chat(_bridge.LocalizerManager, client, "Arenas_Chat_MenusUnavailable");
-            return;
-        }
-
-        var lm = _bridge.LocalizerManager;
-
-        var menu = new Menu();
-        menu.SetTitle(c => Loc.Str(lm, c, "Arenas_Menu_WeaponPref_Title"));
-
-        foreach (var type in AllowedWeaponTypes())
-        {
-            var weaponType = type;
-            // Sub-menu built per-navigation so it reflects the current preference each time.
-            menu.AddSubMenu(
-                c => Loc.Str(lm, c, WeaponTypeKey(weaponType)),
-                c => BuildWeaponSubMenu(c, weaponType));
-        }
-
-        menu.AddExitItem(c => Loc.Str(lm, c, "Arenas_Menu_Exit"));
-        mm.DisplayMenu(client, menu);
-    }
-
-    private Menu BuildWeaponSubMenu(IGameClient client, WeaponType weaponType)
-    {
-        var lm      = _bridge.LocalizerManager;
-        var steamId = client.SteamId;
-
-        var sub = new Menu();
-        sub.SetTitle(c => Loc.Str(lm, c, "Arenas_Menu_WeaponPref_Title"));
-
-        // "Random" resets the preference (null == random).
-        sub.AddItem(
-            c =>
-            {
-                var isRandom = _store.GetWeaponPreference(steamId, weaponType) is null;
-                var label    = Loc.Str(lm, c, "Arenas_General_Random");
-                return Loc.Str(lm, c,
-                    isRandom ? "Arenas_Menu_WeaponPref_ItemEnabled" : "Arenas_Menu_WeaponPref_ItemDisabled", label);
-            },
-            controller =>
-            {
-                _store.SetWeaponPreference(steamId, weaponType, null);
-                Loc.Chat(lm, controller.Client, "Arenas_Chat_WeaponPreferencesAdded",
-                    Loc.Str(lm, controller.Client, "Arenas_General_Random"));
-                controller.Refresh();
-            });
-
-        foreach (var classname in Loadout.WeaponCatalog.GetWeaponList(weaponType))
-        {
-            var weapon = classname;
-            sub.AddItem(
-                c =>
-                {
-                    var selected = _store.GetWeaponPreference(steamId, weaponType) == weapon;
-                    var label    = FriendlyWeaponName(weapon);
-                    return Loc.Str(lm, c,
-                        selected ? "Arenas_Menu_WeaponPref_ItemEnabled" : "Arenas_Menu_WeaponPref_ItemDisabled", label);
-                },
-                controller =>
-                {
-                    _store.SetWeaponPreference(steamId, weaponType, weapon);
-                    Loc.Chat(lm, controller.Client, "Arenas_Chat_WeaponPreferencesAdded", FriendlyWeaponName(weapon));
-                    controller.Refresh();
-                });
-        }
-
-        sub.AddBackItem(c => Loc.Str(lm, c, "Arenas_Menu_Back"));
-        return sub;
-    }
-
-    // ── helpers ────────────────────────────────────────────────────────────────
-
-    private IEnumerable<WeaponType> AllowedWeaponTypes()
-    {
-        var a = _config.Config.AllowedWeaponPreferences;
-        if (a.Rifle)   yield return WeaponType.Rifle;
-        if (a.Sniper)  yield return WeaponType.Sniper;
-        if (a.Smg)     yield return WeaponType.Smg;
-        if (a.Lmg)     yield return WeaponType.Lmg;
-        if (a.Shotgun) yield return WeaponType.Shotgun;
-        if (a.Pistol)  yield return WeaponType.Pistol;
-    }
-
-    private static string WeaponTypeKey(WeaponType type) => type switch
-    {
-        WeaponType.Rifle   => "Arenas_Round_Rifle",
-        WeaponType.Sniper  => "Arenas_Round_Sniper",
-        WeaponType.Smg     => "Arenas_Round_Smg",
-        WeaponType.Lmg     => "Arenas_Round_Lmg",
-        WeaponType.Shotgun => "Arenas_Round_Shotgun",
-        WeaponType.Pistol  => "Arenas_Round_Pistol",
-        _                  => "Arenas_General_Random",
-    };
-
-    /// <summary>"weapon_ak47" → "Ak47" for menu display (no locale key per weapon in K4 either).</summary>
-    private static string FriendlyWeaponName(string classname)
-    {
-        var name = classname.StartsWith("weapon_") ? classname["weapon_".Length..] : classname;
-        return name.Length == 0 ? classname : char.ToUpperInvariant(name[0]) + name[1..];
+        builder.ExitItem(client => Loc.Str(lm, client, "Arenas_Menu_Exit"));
+        RoundsMenu = builder.Build();
     }
 }

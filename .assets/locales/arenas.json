@@ -152,6 +152,9 @@
   "Arenas_Chat_WeaponPreferencesAdded": {
     "en-US": "{{silver}}You have added {{lime}}{0}{{silver}} to your weapon preferences."
   },
+  "Arenas_Chat_WeaponPreferencesRemoved": {
+    "en-US": "{{silver}}You have set {{lime}}{0}{{silver}} back to random."
+  },
 
   "Arenas_Round_Rifle": {
     "en-US": "Rifle"

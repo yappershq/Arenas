@@ -33,16 +33,29 @@ internal sealed class ArenasApi : IArenasShared
     internal Action?                     TerminateRound        { get; set; }
     internal Func<SteamID, WeaponType, string?>? WeaponPrefResolver { get; set; }
 
+    /// <summary>
+    /// Invoked whenever the special-round set changes (register/unregister). Core wires this to
+    /// re-fold specials into the RoundTypeRegistry + rebuild the rounds menu. This makes addon
+    /// registration order-independent: ModSharp does NOT order OnAllModulesLoaded across plugins, so
+    /// an addon may register its rounds AFTER Core's OAM already ran — the callback catches it up.
+    /// </summary>
+    internal Action? OnRoundTypesChanged { get; set; }
+
     // ── Registration ──────────────────────────────────────────────────────────
 
     public int RegisterRoundType(string name, int teamSize, bool enabledByDefault, ArenaRoundCallback onStart, ArenaRoundCallback onEnd)
     {
         var id = _nextId++;
         _roundTypes[id] = new RoundTypeEntry(id, name, teamSize, enabledByDefault, onStart, onEnd);
+        OnRoundTypesChanged?.Invoke();
         return id;
     }
 
-    public void UnregisterRoundType(int id) => _roundTypes.Remove(id);
+    public void UnregisterRoundType(int id)
+    {
+        if (_roundTypes.Remove(id))
+            OnRoundTypesChanged?.Invoke();
+    }
 
     // ── State queries ─────────────────────────────────────────────────────────
 

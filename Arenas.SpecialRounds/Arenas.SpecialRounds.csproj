@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    External special-round addon plugin. Depends ONLY on Arenas.Shared (the public contract) — never
+    on Arenas.Core. Registers HeadshotOnly / Nades / NoCrosshair / OneTap round types through
+    IArenasShared.RegisterRoundType. Ships as its own module DLL alongside Arenas.Core.
+  -->
+  <PropertyGroup>
+    <AssemblyName>Arenas.SpecialRounds</AssemblyName>
+    <RootNamespace>Arenas.SpecialRounds</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Arenas.Shared\Arenas.Shared.csproj" />
+  </ItemGroup>
+</Project>

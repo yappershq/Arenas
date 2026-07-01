@@ -8,6 +8,7 @@ using Arenas.Queue;
 using Arenas.Utils;
 using Microsoft.Extensions.Logging;
 using Sharp.Modules.CommandCenter.Shared;
+using Sharp.Modules.MenuManager.Shared;
 using Sharp.Shared.Enums;
 using Sharp.Shared.Objects;
 using Sharp.Shared.Types;
@@ -112,9 +113,19 @@ internal sealed class CommandsModule : IModule
     }
 
     // ── preference menus ─────────────────────────────────────────────────────
+    // MenusModule owns the cached GunsMenu/RoundsMenu (built with per-player title factories);
+    // the command just displays the cached instance for the caller.
 
-    private void OnGuns(IGameClient client, StringCommand _)   => _menus.OpenWeaponPreferenceMenu(client);
-    private void OnRounds(IGameClient client, StringCommand _)  => _menus.OpenRoundPreferenceMenu(client);
+    private void OnGuns(IGameClient client, StringCommand _)  => ShowMenu(client, _menus.GunsMenu);
+    private void OnRounds(IGameClient client, StringCommand _) => ShowMenu(client, _menus.RoundsMenu);
+
+    private void ShowMenu(IGameClient client, Menu? menu)
+    {
+        if (_bridge.MenuManager is { } mm && menu is not null)
+            mm.DisplayMenu(client, menu);
+        else
+            Loc.Chat(_bridge.LocalizerManager, client, "Arenas_Chat_MenusUnavailable");
+    }
 
     // ── afk toggle ─────────────────────────────────────────────────────────────
 

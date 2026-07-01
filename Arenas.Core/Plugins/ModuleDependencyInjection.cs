@@ -14,6 +14,10 @@ internal static class ModuleDependencyInjection
     /// <summary>Register all Core services and modules into the DI container.</summary>
     internal static IServiceCollection AddModules(this IServiceCollection services)
     {
+        // Shared round-type registry (built-ins + config + addon-registered specials). Owned by
+        // RoundFlowModule, read by MenusModule — a plain singleton (not an IModule).
+        services.AddSingleton<Rounds.RoundTypeRegistry>();
+
         // Phase C — persistence seam: CookiePrefStore is the default IArenasStore (IClientPreference
         // cookies, no DB needed). An optional Arenas.Database project with SqlPrefStore can override
         // IArenasStore by registering before the host is built.

@@ -41,6 +41,7 @@ internal sealed class ServerConfigModule : IModule, IGameListener
         ("mp_t_default_primary", ""),
         ("mp_t_default_secondary", ""),
         ("mp_free_armor", "0"),
+        ("mp_max_armor", "0"),
         ("mp_equipment_reset_rounds", "0"),
         ("mp_round_restart_delay", "2"),
         ("mp_freezetime", "3"),
@@ -137,6 +138,7 @@ internal sealed class ServerConfigModule : IModule, IGameListener
         mp_t_default_primary ""
         mp_t_default_secondary ""
         mp_free_armor 0
+        mp_max_armor 0
         mp_equipment_reset_rounds 0
         mp_round_restart_delay 2
         mp_freezetime 3
