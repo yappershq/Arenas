@@ -9,12 +9,19 @@ cd /home/claude/Arenas && env -u version dotnet build -c Release
 Output: `.build/modules/Arenas.Core/Arenas.dll` + `.build/shared/Arenas.Shared/Arenas.Shared.dll`.
 
 ## Phases
-- [x] **A. Scaffold** — slnx, Directory.Build.props, .gitignore, Core (ArenasPlugin + InterfaceBridge + IModule + DI + BootstrapModule + Utils), Shared (IArenasShared stub: RegisterRoundType / GetArenaPlacement), locale stub. GREEN. Committed.
-- [ ] **B. Core spine** — Config, PlayerLifecycle, Arena assignment/ladder/queue, Round flow, weapon loadout per round type.
-- [ ] **C. Stats / ranking / DB** (Arenas.Database) + commands (!rank, !top, …) + menus (weapon prefs).
-- [ ] **D. Public API + SpecialRounds module** — flesh IArenasShared, Arenas.SpecialRounds (HeadshotOnly/Nades/NoCrosshair/OneTap).
+- [x] **A. Scaffold** — slnx, Directory.Build.props, .gitignore, Core + Shared (IArenasShared, WeaponType), locale stub. GREEN. Committed.
+- [x] **B. Core spine** — Config + ServerConfig (economy-off convars), PlayerLifecycle (+cookie prefs), Arena finder/manager (spawn clustering), Queue (internal self-contained ladder), RoundFlow, Loadout, API resolver wiring. GREEN. Committed. Reviewed.
+- [ ] **C. Commands + menus + challenge + compatibility** — CommandCenter bare commands (queue/guns/rounds/afk/challenge/…), IMenuManager pref menus, challenge duels, cross-arena damage/flash block (PlayerDispatchTraceAttack), force-clantags.
+- [ ] **D. SpecialRounds module** — Arenas.SpecialRounds (HeadshotOnly/Nades/NoCrosshair/OneTap) via IArenasShared.RegisterRoundType. See docs/PHASE_D_APIS.md.
 - [ ] **E. Self-review** — convention/anti-pattern pass; fix; green; commit.
 - [ ] **F. Publish** — gh repo create yappershq/Arenas --public; house README.
+
+## Ranking + economy (FINAL coordinator directive — lean)
+- **Internal self-contained ladder** — which arena you're in IS your rank; climb by winning your duel, drop by losing (QueueManager). NO external ranking dependency, NO stats/elo DB, NO rank-provider abstraction.
+- **LevelRanks runs out of the box** alongside Arenas (awards its own global points from kills); Arenas needs ZERO integration.
+- **Optional-only seam:** a lean LevelRanks *read* for arena seeding-by-global-rank is documented in QueueModule.OnAllSharpModulesLoaded (`// ponytail:`) but NOT built (YAGNI + avoids a foreign .Shared build dep).
+- **Standard CS round win/loss economy DISABLED** via ServerConfigModule convars (mp_maxmoney 0, mp_teamcashawards 0, mp_playercashawards 0, mp_maxrounds 0, mp_autoteambalance 0, …) on Init + OnServerActivate; shipped as .assets/configs/arenas.cfg.
+- REMOVED the speculative IArenaRankProvider + IArenasVipProvider (no consumer; K4 has no VIP/rank features).
 
 ## Key design decisions (from scoping — see PORT_PLAN.md for full)
 - Special rounds: ONE `Arenas.SpecialRounds` module registering N round types via `IArenasShared.RegisterRoundType`, sharing one arena-placement-keyed state store.
