@@ -29,6 +29,7 @@ internal sealed class CrossArenaIsolationModule : IModule, IEventListener
     private readonly ArenaManagerModule          _arenaManager;
 
     private Func<IPlayerDispatchTraceAttackHookParams, HookReturnValue<long>, HookReturnValue<long>>? _traceAttackHook;
+    private bool _flashListenerInstalled;
 
     int IEventListener.ListenerVersion  => IEventListener.ApiVersion;
     int IEventListener.ListenerPriority => 0;
@@ -59,6 +60,7 @@ internal sealed class CrossArenaIsolationModule : IModule, IEventListener
         {
             _bridge.EventManager.HookEvent("player_blind");
             _bridge.EventManager.InstallEventListener(this);
+            _flashListenerInstalled = true;
         }
     }
 
@@ -72,7 +74,11 @@ internal sealed class CrossArenaIsolationModule : IModule, IEventListener
             _traceAttackHook = null;
         }
 
-        _bridge.EventManager.RemoveEventListener(this);
+        if (_flashListenerInstalled)
+        {
+            _bridge.EventManager.RemoveEventListener(this);
+            _flashListenerInstalled = false;
+        }
     }
 
     // ── Cross-arena damage block ─────────────────────────────────────────────
