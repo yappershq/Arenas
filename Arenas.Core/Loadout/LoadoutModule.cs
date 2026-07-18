@@ -44,6 +44,10 @@ internal sealed class LoadoutModule : IModule
         if (_config.Config.CompatibilitySettings.GiveKnifeByDefault)
             pawn.GiveNamedItem("weapon_knife");
 
+        // Set only for the Pistol round when pistol-armor-balance is on (see below) — null means
+        // "use roundType.Armor/Helmet as-is" for every other round type.
+        bool? pistolBalanceArmor = null;
+
         if (roundType.PrimaryPreference == Shared.WeaponType.Unknown)
         {
             // Warmup / random round types: fully random primary + pistol.
@@ -64,16 +68,27 @@ internal sealed class LoadoutModule : IModule
                 pawn.GiveNamedItem(pref);
             }
 
+            string? chosenSecondary = null;
             if (roundType.SecondaryWeapon is { } fixedSecondary)
             {
+                chosenSecondary = fixedSecondary;
                 pawn.GiveNamedItem(fixedSecondary);
             }
             else if (roundType.UsePreferredSecondary)
             {
-                var pref = _store.GetWeaponPreference(client.SteamId, Shared.WeaponType.Pistol)
+                chosenSecondary = _store.GetWeaponPreference(client.SteamId, Shared.WeaponType.Pistol)
                            ?? GetDefaultForType(Shared.WeaponType.Pistol)
                            ?? WeaponCatalog.GetRandomWeapon(Shared.WeaponType.Pistol);
-                pawn.GiveNamedItem(pref);
+                pawn.GiveNamedItem(chosenSecondary);
+            }
+
+            // splewis-style pistol-round balance: helmet always off, kevlar only for cheap/default
+            // pistols (Glock/USP-S/P2000) — upgraded pistols (Deagle, Five-SeveN, Tec9, CZ75,
+            // Dualies, R8, P250) get no armor at all. Overrides RoundType.Armor/Helmet for this round only.
+            if (_config.Config.CompatibilitySettings.PistolArmorBalance
+                && roundType.Name == RoundTypeCatalog.Pistol)
+            {
+                pistolBalanceArmor = WeaponCatalog.IsCheapPistol(chosenSecondary);
             }
         }
 
@@ -82,8 +97,8 @@ internal sealed class LoadoutModule : IModule
         //  - GiveNamedItem doesn't ready the weapon same frame (clip not yet initialised).
         // Capture EntityIndex only — never hold IPlayerPawn across frames (dangling pointer risk).
         var pawnIndex  = pawn.Index;
-        var wantArmor  = roundType.Armor;
-        var wantHelmet = roundType.Helmet;
+        var wantArmor  = pistolBalanceArmor ?? roundType.Armor;
+        var wantHelmet = pistolBalanceArmor is not null ? false : roundType.Helmet;
 
         _bridge.ModSharp.InvokeFrameAction(() =>
         {

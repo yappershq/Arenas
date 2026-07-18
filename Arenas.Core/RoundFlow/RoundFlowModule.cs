@@ -93,6 +93,7 @@ internal sealed class RoundFlowModule : IModule, IEventListener
     {
         _bridge.EventManager.HookEvent("round_prestart");
         _bridge.EventManager.HookEvent("round_start");
+        _bridge.EventManager.HookEvent("round_freeze_end");
         _bridge.EventManager.HookEvent("round_end");
         _bridge.EventManager.HookEvent("round_mvp");
         _bridge.EventManager.InstallEventListener(this);
@@ -148,10 +149,50 @@ internal sealed class RoundFlowModule : IModule, IEventListener
     {
         switch (@event.Name)
         {
-            case "round_prestart": OnRoundPreStart(); break;
-            case "round_start":    _isBetweenRounds = false; break;
-            case "round_end":      OnRoundEnd();      break;
+            case "round_prestart":   OnRoundPreStart();    break;
+            case "round_start":      _isBetweenRounds = false; break;
+            case "round_freeze_end": OnRoundFreezeEnd();   break;
+            case "round_end":        OnRoundEnd();         break;
         }
+    }
+
+    // ── round_freeze_end: start the duel round-timer (splewis-style hard cap) ──────────────
+
+    private void OnRoundFreezeEnd()
+    {
+        var seconds = _config.Config.RoundTimerSeconds;
+        if (seconds <= 0) return; // 0 = disabled
+
+        var rules = _bridge.ModSharp.GetGameRules();
+        if (rules is null || rules.IsWarmupPeriod) return;
+
+        // StopOnRoundEnd/StopOnMapEnd: ModSharp only clears a StopOnRoundEnd timer at the next round
+        // RESTART, not at round_end itself — round_end and round_prestart/round_start for the next
+        // round are not instantaneous, so this timer can still be pending when it fires. Correctness
+        // here actually relies on the _isBetweenRounds guard below (set true in OnRoundEnd, cleared in
+        // round_start) — never remove that guard even if this timer's auto-cancel looks sufficient.
+        _bridge.ModSharp.PushTimer(ForceTerminateRoundOnTimeout, seconds,
+            GameTimerFlags.StopOnRoundEnd | GameTimerFlags.StopOnMapEnd);
+    }
+
+    /// <summary>Hard round-timeout: force-ends the round even if no arena has "finished" yet (e.g. a
+    /// stalemate where nobody died). Still respects the same active-matchup guard as TerminateRoundIfPossible
+    /// (never force-ends a round that never really started — e.g. a lone player with no opponent).</summary>
+    private void ForceTerminateRoundOnTimeout()
+    {
+        if (_isBetweenRounds) return; // already ended naturally in the meantime
+
+        var rules = _bridge.ModSharp.GetGameRules();
+        if (rules is null || rules.IsWarmupPeriod) return;
+
+        // Only force-end while at least one arena is a live 2-sided matchup — same guard
+        // TerminateRoundIfPossible uses via HasFinished/IsArenaActive.
+        if (!_arenaManager.Arenas.Any(IsArenaActive)) return;
+
+        var players = GetActiveRoundPlayers();
+        if (players.All(c => c.IsFakeClient)) return;
+
+        DoTerminateRound(rules, players);
     }
 
     // ── round_prestart: ladder rebuild + arena assignment ───────────────────
@@ -534,15 +575,26 @@ internal sealed class RoundFlowModule : IModule, IEventListener
         var rules = _bridge.ModSharp.GetGameRules();
         if (rules is null || rules.IsWarmupPeriod) return;
 
-        var players = _bridge.ClientManager.GetGameClients(inGame: true)
-            .Where(c => !c.IsHltv && c.GetPlayerController() is { Team: > CStrikeTeam.Spectator })
-            .ToList();
-
+        var players = GetActiveRoundPlayers();
         if (players.All(c => c.IsFakeClient)) return;
 
         var allFinished = _arenaManager.Arenas.All(a => !HasRealPlayers(a) || HasFinished(a));
         if (!allFinished) return;
 
+        DoTerminateRound(rules, players);
+    }
+
+    /// <summary>In-game, non-HLTV, non-spectator clients — the pool TerminateRoundIfPossible /
+    /// ForceTerminateRoundOnTimeout decide the winner from.</summary>
+    private List<IGameClient> GetActiveRoundPlayers()
+        => _bridge.ClientManager.GetGameClients(inGame: true)
+            .Where(c => !c.IsHltv && c.GetPlayerController() is { Team: > CStrikeTeam.Spectator })
+            .ToList();
+
+    /// <summary>Shared terminate-round decision (alive-count winner, draw coinflip) used by both the
+    /// natural "all arenas finished" path and the forced round-timeout path.</summary>
+    private void DoTerminateRound(IGameRules rules, List<IGameClient> players)
+    {
         _isBetweenRounds = true;
 
         var alive = players.Where(c => c.GetPlayerController()?.GetPlayerPawn() is { IsAlive: true }).ToList();
@@ -563,11 +615,14 @@ internal sealed class RoundFlowModule : IModule, IEventListener
         => (a.Team1?.Any(s => !IsBotSlot(s) && IsSlotConnected(s)) ?? false)
         || (a.Team2?.Any(s => !IsBotSlot(s) && IsSlotConnected(s)) ?? false);
 
+    // A live 2-sided matchup: both teams have a connected, non-AFK player.
+    private bool IsArenaActive(ArenaSlot a)
+        => (a.Team1?.Any(s => IsSlotConnected(s) && !QueueManager.GetOrCreateState(s).Afk) ?? false)
+        && (a.Team2?.Any(s => IsSlotConnected(s) && !QueueManager.GetOrCreateState(s).Afk) ?? false);
+
     private bool HasFinished(ArenaSlot a)
     {
-        var active = (a.Team1?.Any(s => IsSlotConnected(s) && !QueueManager.GetOrCreateState(s).Afk) ?? false)
-                  && (a.Team2?.Any(s => IsSlotConnected(s) && !QueueManager.GetOrCreateState(s).Afk) ?? false);
-        if (!active) return true;
+        if (!IsArenaActive(a)) return true;
 
         return (a.Team1?.All(s => !IsSlotAlive(s)) ?? false) || (a.Team2?.All(s => !IsSlotAlive(s)) ?? false);
     }

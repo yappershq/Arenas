@@ -48,4 +48,20 @@ internal static class ChatFormat
             result = result.Replace(placeholder, code, StringComparison.OrdinalIgnoreCase);
         return result;
     }
+
+    /// <summary>
+    /// Remove color tokens entirely. Used for MenuManager (center HTML) menu titles/items — the menu
+    /// is HTML and colored by MenuManager's own config, so chat color tokens don't belong there and
+    /// would otherwise render as literal <c>{lightred}</c> text.
+    /// </summary>
+    internal static string StripColorCodes(string message)
+    {
+        if (string.IsNullOrEmpty(message) || !message.Contains('{'))
+            return message;
+
+        var result = message;
+        foreach (var placeholder in ColorCache.Keys)
+            result = result.Replace(placeholder, string.Empty, StringComparison.OrdinalIgnoreCase);
+        return result;
+    }
 }

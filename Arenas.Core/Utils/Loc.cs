@@ -37,9 +37,11 @@ internal static class Loc
         }
     }
 
-    /// <summary>Per-client localized string (menu titles/items). Falls back to the key if absent.</summary>
+    /// <summary>Per-client localized string (menu titles/items). Falls back to the key if absent.
+    /// Color tokens are stripped — MenuManager renders HTML and colors the menu itself, so a chat
+    /// token like {lightred} would otherwise show as literal text in the menu.</summary>
     public static string Str(ILocalizerManager? lm, IGameClient client, string key, params object?[] args)
-        => lm is null ? key : lm.For(client).Text(key, args);
+        => lm is null ? key : ChatFormat.StripColorCodes(lm.For(client).Text(key, args));
 
     /// <summary>Server-side localized string. Falls back to the key.</summary>
     public static string Format(ILocalizerManager? lm, string key, params object?[] args)

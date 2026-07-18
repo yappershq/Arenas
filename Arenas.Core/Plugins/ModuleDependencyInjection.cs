@@ -55,6 +55,7 @@ internal static class ModuleDependencyInjection
         AddModule<Menus.MenusModule>(services);
         AddModule<Commands.CommandsModule>(services);
         AddModule<Player.ClanTagModule>(services);
+        AddModule<Player.ScoreboardModule>(services);
 
         return services;
     }

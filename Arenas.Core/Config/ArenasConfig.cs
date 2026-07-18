@@ -21,12 +21,19 @@ public sealed class CommandSettings
 
 public sealed class CompatibilitySettings
 {
-    [JsonPropertyName("force-arena-clantags")]        public bool ForceArenaClantags       { get; set; }
+    [JsonPropertyName("force-arena-clantags")]        public bool ForceArenaClantags       { get; set; } = true;
     [JsonPropertyName("block-flash-of-not-opponent")] public bool BlockFlashOfNotOpponent  { get; set; }
     [JsonPropertyName("block-damage-of-not-opponent")] public bool BlockDamageOfNotOpponent { get; set; }
     [JsonPropertyName("give-knife-by-default")]       public bool GiveKnifeByDefault       { get; set; } = true;
     [JsonPropertyName("disable-clantags")]            public bool DisableClantags          { get; set; }
     [JsonPropertyName("prevent-draw-rounds")]         public bool PreventDrawRounds        { get; set; } = true;
+
+    /// <summary>Score-groups the scoreboard by arena rank (see Player.ScoreboardModule).</summary>
+    [JsonPropertyName("scoreboard-arena-grouping")]   public bool ScoreboardArenaGrouping  { get; set; } = true;
+
+    /// <summary>splewis-style pistol-round balance: helmet always off, kevlar only for cheap/default
+    /// pistols. See Loadout.LoadoutModule / Loadout.WeaponCatalog.CheapPistols.</summary>
+    [JsonPropertyName("pistol-armor-balance")]        public bool PistolArmorBalance       { get; set; } = true;
 }
 
 public sealed class AllowedWeaponPreferences
@@ -74,4 +81,9 @@ public sealed class ArenasConfig
 
     /// <summary>Empty = use built-in RoundTypeCatalog.Defaults(). Non-empty overrides them entirely (matches K4).</summary>
     [JsonPropertyName("round-settings")] public List<RoundTypeSettings> RoundSettings { get; set; } = [];
+
+    /// <summary>Hard cap (seconds) on a live round's duration, timed from round_freeze_end (splewis-style
+    /// duel timer — CS2 clamps mp_roundtime too high to use for this). 0 = disabled (no forced timeout).
+    /// See RoundFlowModule's round-timer (OnRoundFreezeEnd / ForceTerminateRoundOnTimeout).</summary>
+    [JsonPropertyName("round-timer-seconds")] public int RoundTimerSeconds { get; set; } = 30;
 }

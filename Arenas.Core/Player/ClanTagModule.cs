@@ -3,6 +3,7 @@ using Arenas.Plugins;
 using Arenas.Queue;
 using Microsoft.Extensions.Logging;
 using Sharp.Shared.Enums;
+using Sharp.Shared.Listeners;
 
 namespace Arenas.Player;
 
@@ -14,8 +15,15 @@ namespace Arenas.Player;
 /// off the module installs no timer at all.
 ///
 /// SetClanTag does nothing on fake clients, so bots are skipped.
+///
+/// The sync timer is (re)armed from <see cref="IGameListener.OnServerActivate"/> — NOT from
+/// OnAllSharpModulesLoaded, which only runs once per plugin load. ModSharp strips StopOnMapEnd timers
+/// at map end, so a timer pushed only at plugin load never survives the first map change. Mirrors
+/// ServerConfigModule/ArenaManagerModule. OnServerActivate fires once per map (including the boot
+/// map), and the previous map's StopOnMapEnd timer is already gone by the time it fires again, so
+/// exactly one repeating timer is ever live per module.
 /// </summary>
-internal sealed class ClanTagModule : IModule
+internal sealed class ClanTagModule : IModule, IGameListener
 {
     private const double SyncInterval = 3.0;
 
@@ -23,6 +31,9 @@ internal sealed class ClanTagModule : IModule
     private readonly ILogger<ClanTagModule> _logger;
     private readonly ConfigModule         _config;
     private readonly QueueModule          _queueModule;
+
+    int IGameListener.ListenerVersion  => IGameListener.ApiVersion;
+    int IGameListener.ListenerPriority => 0;
 
     public ClanTagModule(InterfaceBridge bridge, ILogger<ClanTagModule> logger, ConfigModule config, QueueModule queueModule)
     {
@@ -33,9 +44,16 @@ internal sealed class ClanTagModule : IModule
     }
 
     public bool Init() => true;
-    public void OnPostInit() { }
 
-    public void OnAllSharpModulesLoaded()
+    public void OnPostInit()
+        => _bridge.ModSharp.InstallGameListener(this);
+
+    public void OnAllSharpModulesLoaded() { }
+
+    public void Shutdown()
+        => _bridge.ModSharp.RemoveGameListener(this);
+
+    void IGameListener.OnServerActivate()
     {
         var compat = _config.Config.CompatibilitySettings;
         if (!compat.ForceArenaClantags || compat.DisableClantags)
@@ -47,8 +65,6 @@ internal sealed class ClanTagModule : IModule
         _bridge.ModSharp.PushTimer(SyncClanTags, SyncInterval,
             GameTimerFlags.StopOnMapEnd | GameTimerFlags.Repeatable);
     }
-
-    public void Shutdown() { }
 
     private void SyncClanTags()
     {

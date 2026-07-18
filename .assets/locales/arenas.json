@@ -4,7 +4,7 @@
   },
 
   "Arenas_Tag_Arena": {
-    "en-US": "ARENA {0} |"
+    "en-US": "#{0} arena"
   },
   "Arenas_Tag_Afk": {
     "en-US": "AFK |"

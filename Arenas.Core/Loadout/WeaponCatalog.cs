@@ -39,6 +39,16 @@ internal static class WeaponCatalog
         "weapon_tec9", "weapon_p250", "weapon_cz75a", "weapon_fiveseven", "weapon_revolver",
     ];
 
+    /// <summary>Free-buy / default pistols (Glock, USP-S, P2000). Used by the pistol-round armor
+    /// balance (splewis-style): kevlar only if the player's secondary is one of these — upgraded
+    /// pistols (Deagle, Five-SeveN, Tec9, CZ75, Dualies, R8, P250) get no armor.</summary>
+    public static readonly List<string> CheapPistols =
+    [
+        "weapon_glock", "weapon_usp_silencer", "weapon_hkp2000",
+    ];
+
+    public static bool IsCheapPistol(string? classname) => classname is not null && CheapPistols.Contains(classname);
+
     public static List<string> GetWeaponList(WeaponType type) => type switch
     {
         WeaponType.Rifle   => RifleItems,
